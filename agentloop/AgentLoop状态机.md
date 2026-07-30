@@ -1,0 +1,234 @@
+# AgentLoop 状态机
+
+## 目的
+
+状态机只规定何时允许推进、退回、暂停和恢复。流程文档规定当前状态做什么；字段保存方式统一遵守[产物与目录协议](产物与目录协议.md)。
+
+## 普通 Loop 主状态
+
+```text
+draft
+→ clarifying
+→ awaiting_requirement_confirmation
+→ ready_for_development
+→ development_preparing
+→ developing
+→ ready_for_verification
+→ verifying
+→ verified
+→ done
+```
+
+任一非终态可进入 `blocked` 或 `cancelled`。
+
+`awaiting_requirement_confirmation` 是一个 Gate，不一定形成停顿：
+
+- `manual`：必须等待有效人工确认事件。
+- `auto_high_confidence`：满足项目策略时，可在同一执行循环中自动通过并记录自动判定依据。
+
+Agent 不得把自己写入的字段冒充人工确认。
+
+## 复合 Loop 主状态
+
+`execution_profile: composite` 在需求确认后使用：
+
+```text
+ready_for_development
+→ orchestrating
+→ verified
+→ done
+```
+
+`orchestrating` 表示父状态由各子流程独立推进；主状态不再随着某一个子流程在开发和测试之间来回切换。
+
+子流程状态：
+
+```text
+pending
+→ development_preparing
+→ developing
+→ ready_for_verification
+→ verifying
+→ passed
+```
+
+失败状态为 `failed` 或 `blocked`；无需执行可标记 `skipped` 并记录原因。
+
+## 子流程聚合规则
+
+```text
+全部子流程为 passed 或有依据的 skipped
+→ 主状态 orchestrating → verified
+
+至少一个子流程可继续运行
+→ 主状态保持 orchestrating
+
+存在 failed
+→ 主状态保持 orchestrating
+→ 修复、退回或人工决定；不得进入 verified
+
+所有未完成子流程均为 blocked
+→ 主状态 blocked，resume_state: orchestrating
+```
+
+子流程可以开发与测试交错进行。例如 A 正在 `verifying`、B 正在 `developing`，主状态仍为 `orchestrating`。测试交接记录在各自的 `subflows[].verification_handoff`，不使用一份全局交接覆盖所有子流程。
+
+父子 Loop 的父 Loop 使用同一聚合原则：所有必需子 Loop 完成才可进入 `verified`。
+
+## 状态职责和出口
+
+| 状态 | 含义 | 主要负责人 | 出口条件 |
+|---|---|---|---|
+| `draft` | 已记录原始需求 | 需求 Agent | 原始问题、提出者和背景已记录 |
+| `clarifying` | 核对事实、目标、范围、验收和原型 | 需求 Agent | 当前执行模式要求的需求产物完成 |
+| `awaiting_requirement_confirmation` | 执行需求确认 Gate | 需求负责人或审批策略 | 有效人工事件，或自动确认条件全部满足 |
+| `ready_for_development` | 需求已确认，允许选择开发流程 | 开发 Agent | Git 基线和路由输入可用 |
+| `development_preparing` | 调查现有实现并完成编码前产物 | 开发 Agent | 编码前确认通过 |
+| `developing` | 编码、构建、静态检查和必要单元测试 | 开发 Agent | 开发自检和测试交接完成 |
+| `ready_for_verification` | 开发交付等待测试接收 | 测试 Agent | 测试路由和入口检查完成 |
+| `verifying` | 执行流程验证 | 测试 Agent | 全部必需流程有明确结果 |
+| `orchestrating` | 调度并聚合多个子流程或子 Loop | 协调 Agent | 聚合规则满足 |
+| `verified` | 必需验证已通过 | 完成策略 | 完成 Gate 通过 |
+| `done` | 本轮开发 AgentLoop 完成 | 无 | 终态 |
+| `blocked` | 暂时无法继续 | 当前负责人 | 阻塞解除并重新检查 `resume_state` |
+| `cancelled` | 任务被明确取消 | 授权者 | 终态 |
+
+## 正常转换
+
+| 当前状态 | 目标状态 | 必需证据 |
+|---|---|---|
+| `draft` | `clarifying` | 原始需求记录 |
+| `clarifying` | `awaiting_requirement_confirmation` | 需求、验收、必要原型和一致性检查 |
+| `awaiting_requirement_confirmation` | `ready_for_development` | 有效审批事件或自动确认依据 |
+| `ready_for_development` | `development_preparing` | Git 基线和开发路由 |
+| `ready_for_development` | `orchestrating` | 复合拆分、依赖和范围已记录 |
+| `development_preparing` | `developing` | 编码前产物及检查 |
+| `developing` | `ready_for_verification` | 代码提交、开发自检和测试交接 |
+| `ready_for_verification` | `verifying` | 测试范围、复用流程和执行器 |
+| `verifying` | `verified` | 全部必需测试为 `passed` |
+| `orchestrating` | `verified` | 全部必需子流程或子 Loop 为 `passed/skipped` |
+| `verified` | `done` | 完成 Gate 通过 |
+
+`trivial` 模式仍保存这些逻辑状态，但允许在一次执行循环内连续通过多个已满足的 Gate，不需要为每个状态人工停顿或创建独立文件。
+
+## Git 基线门禁
+
+第一次修改项目文件前必须满足：
+
+```text
+项目由有效 Git 仓库管理
++ baseline_commit 已保存
++ 工作区已有变化已经识别
++ 用户已有修改不会被覆盖
+```
+
+项目不是 Git 仓库时，必须先按[Git 版本控制与可追溯规则](../rules/Git版本控制与可追溯规则.md)完成初始化和初始基线提交。无法建立安全基线时进入 `blocked`。
+
+## 失败与退回
+
+```text
+需求缺失、冲突或验收不可执行
+→ clarifying
+
+开发准备或编码中发现主流程、子流程或设计路线选错
+→ development_preparing
+→ 更新路由和编码前产物后重新进入 developing
+
+设计改变范围、核心流程或验收标准
+→ clarifying
+→ 需求版本加一并重新确认
+
+开发自检失败
+→ 保持 developing
+
+测试发现实现错误
+→ developing
+→ 修复后重新形成 ready_for_verification
+
+测试发现测试代码、环境或数据错误
+→ 保持 verifying
+
+测试发现需求或预期错误
+→ clarifying
+```
+
+复合 Loop 对当前子流程执行同样退回，父状态保持 `orchestrating`；只有整体需求改变时，父状态退回 `clarifying`。
+
+从测试退回时必须保存失败证据、问题归属和重跑范围。开发与测试往返次数遵守执行协议的全局熔断规则。
+
+## 需求变更与失效
+
+`ready_for_development` 之后需求变化：
+
+```text
+退回 clarifying
+→ requirement_version 加一
+→ 重新确认范围和验收
+→ 将受影响 artifact/evidence 标为 stale
+→ 将被替代产物标为 superseded
+→ 未受影响产物保持 active
+→ 重新选择或确认开发与测试路由
+```
+
+旧需求版本对应的提交、产物和证据不得删除；具体字段见产物协议。
+
+## 审批事件
+
+人工 Gate 只接受宿主系统、UI、CLI 或 API 记录的有效审批事件。事件必须绑定：
+
+```text
+loop_id
++ gate
++ requirement_version
++ 待确认产物摘要 artifact_digest
++ decision
++ actor
++ timestamp
++ source_event_id
+```
+
+用户在对话中回复“可以”只有在宿主将该消息记录为上述审批事件时才算确认。Agent 只能引用事件，不能代填 `actor` 或伪造 `source_event_id`。
+
+自动需求确认只在项目配置为 `auto_high_confidence`，且同时满足以下条件时允许：
+
+```text
+execution_profile == trivial
++ approval.requirement_confirmation.confidence >= minimum_confidence
++ classification.tags 不包含 forbidden_tags
++ trivial 资格条件全部满足
++ 无未解决问题
+```
+
+破坏性操作始终人工确认。
+
+## 阻塞与恢复
+
+进入 `blocked` 时使用产物协议中的：
+
+```yaml
+blocked:
+  reason:
+  owner:
+  unblock_condition:
+  resume_state:
+```
+
+解除后只回到 `resume_state`，并重新检查该状态入口。每次转换追加 `transitions`；字段以产物协议为准，不再维护 `active_flow`、`active_subflow`、`owner` 等重复字段：
+
+- 当前开发主流程：`routing.development.main_flow`
+- 当前执行子流程：`execution.subflow_id`
+- 角色负责人：`owners`
+
+## 完成条件
+
+```text
+所有必需验证通过
++ 所有必需子流程或子 Loop 聚合通过
++ 当前需求版本的产物和证据有效
++ completion Gate 通过
++ Git 检查点可查询
++ 无未处理阻塞
+→ done
+```
+
+`done` 只表示本开发 AgentLoop 完成，不代表已经发布到生产。
