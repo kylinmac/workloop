@@ -143,6 +143,15 @@ deviations. `product-prototype` requires
 until every page, region, control, interaction, state, data source, permission,
 responsive rule, and deviation is complete.
 
+Every new or re-confirmed Loop also declares `integration_data`. Enable it only
+for frontend/backend features whose business display data should come from a
+database. When enabled, frontend runtime records must come from the declared
+backend APIs, and backend responses must query the declared database objects.
+Verification seeds/factories/fixtures one unique sentinel into an isolated test
+database and proves the same sentinel through database, API, and UI evidence.
+Missing coverage or a mismatched sentinel blocks `verified` and parent
+aggregation. Static UI copy, enums, and display configuration are excluded.
+
 ## Gates
 
 Never infer approval from silence. Ask in the current Codex conversation and

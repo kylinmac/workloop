@@ -96,6 +96,45 @@
               "result": {"enum": ["passed", "failed"]}
             }
           },
+          "data_lineage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sentinel", "database", "backend", "frontend"],
+            "properties": {
+              "sentinel": {"type": "string", "minLength": 1},
+              "database": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["generated_by", "objects", "observed_sentinel", "evidence_paths"],
+                "properties": {
+                  "generated_by": {"enum": ["seed", "factory", "fixture"]},
+                  "objects": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+                  "observed_sentinel": {"type": "string", "minLength": 1},
+                  "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                }
+              },
+              "backend": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["endpoints", "observed_sentinel", "evidence_paths"],
+                "properties": {
+                  "endpoints": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+                  "observed_sentinel": {"type": "string", "minLength": 1},
+                  "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                }
+              },
+              "frontend": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["routes", "observed_sentinel", "evidence_paths"],
+                "properties": {
+                  "routes": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+                  "observed_sentinel": {"type": "string", "minLength": 1},
+                  "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                }
+              }
+            }
+          },
           "artifacts": {
             "type": "array",
             "items": {

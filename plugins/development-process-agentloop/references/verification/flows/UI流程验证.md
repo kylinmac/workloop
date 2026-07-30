@@ -92,6 +92,12 @@ coverage:
 
 `automation.path` 必须指向项目内真实存在的测试或脚本文件。`.md` 只能作为报告写入 evidence 的 `stdout_path` 或 artifact，禁止作为 automation。控制程序同时检查路径未逃逸项目根、文件存在，并具有脚本/测试扩展名或可执行权限。
 
+### 数据库到页面的真实数据验证
+
+`integration_data.required: true` 时，前置数据必须由自动化通过 seed、factory 或 fixture 写入隔离测试数据库，不得用前端 mock、路由拦截或写死响应替代。flow 的 `checks` 必须包含 `data_lineage`，随后调用真实后端接口并操作真实页面，逐层断言同一个本次运行唯一 sentinel。
+
+运行证据使用 `data_lineage` 保存数据库对象、后端接口、前端路由的覆盖和各层观察值。三层观察值不一致或未覆盖声明范围时，UI flow 不得通过。
+
 ### 运行证据
 
 - 测试框架报告

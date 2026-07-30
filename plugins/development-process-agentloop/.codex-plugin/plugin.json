@@ -1,6 +1,6 @@
 {
   "name": "development-process-agentloop",
-  "version": "0.1.0+codex.20260730151843",
+  "version": "0.1.0+codex.20260730163925",
   "description": "Run repository development work through the AgentLoop protocol.",
   "author": {
     "name": "Development Process"

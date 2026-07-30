@@ -56,6 +56,7 @@
       }
     },
     "prototype": {"$ref": "#/$defs/prototype"},
+    "integration_data": {"$ref": "#/$defs/integration_data"},
     "scope": {"$ref": "#/$defs/scope"},
     "gates": {
       "type": "object",
@@ -190,6 +191,38 @@
     }
   ],
   "$defs": {
+    "integration_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "reason", "frontend_routes", "backend_endpoints", "database_objects", "verification_flow_id"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1},
+        "frontend_routes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "backend_endpoints": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "database_objects": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "verification_flow_id": {"type": ["string", "null"], "minLength": 1}
+      },
+      "allOf": [{
+        "if": {"properties": {"required": {"const": true}}},
+        "then": {
+          "properties": {
+            "frontend_routes": {"minItems": 1},
+            "backend_endpoints": {"minItems": 1},
+            "database_objects": {"minItems": 1},
+            "verification_flow_id": {"type": "string"}
+          }
+        },
+        "else": {
+          "properties": {
+            "frontend_routes": {"maxItems": 0},
+            "backend_endpoints": {"maxItems": 0},
+            "database_objects": {"maxItems": 0},
+            "verification_flow_id": {"type": "null"}
+          }
+        }
+      }]
+    },
     "prototype": {
       "type": "object",
       "additionalProperties": false,

@@ -11,6 +11,7 @@ import yaml
 ENGINE = Path(__file__).with_name("agentloop.py")
 SYNC_REFERENCES = Path(__file__).with_name("sync_references.py")
 PROTOTYPE_FIDELITY_TEST = Path(__file__).with_name("test_prototype_fidelity.py")
+INTEGRATION_DATA_TEST = Path(__file__).with_name("test_integration_data_source.py")
 HOOKS = ENGINE.parents[1] / "hooks" / "hooks.json"
 
 
@@ -221,6 +222,7 @@ def main() -> None:
         run(root, "doctor")
 
     subprocess.run(["python3", str(PROTOTYPE_FIDELITY_TEST)], check=True)
+    subprocess.run(["python3", str(INTEGRATION_DATA_TEST)], check=True)
     print("passed: AgentLoop full plugin lifecycle")
 
 

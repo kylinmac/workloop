@@ -210,6 +210,78 @@ def prototype_declaration_errors(root: Path, loop: dict) -> list[str]:
     return errors
 
 
+def integration_data_declaration_errors(loop: dict) -> list[str]:
+    if "integration_data" not in loop:
+        return ["integration_data decision must be explicitly declared before requirement confirmation"]
+    return []
+
+
+def integration_data_verification_errors(
+    root: Path,
+    loop: dict,
+    flows: dict[str, dict],
+) -> list[str]:
+    declaration = loop.get("integration_data")
+    if not declaration or not declaration.get("required"):
+        return []
+    flow_id = declaration["verification_flow_id"]
+    flow = flows.get(flow_id)
+    if not flow:
+        return [f"integration data verification flow is missing: {flow_id}"]
+    errors = flow_semantic_errors(root, flow)
+    if flow.get("executor") != "ui":
+        errors.append(f"integration data flow must use the UI executor: {flow_id}")
+    if "data_lineage" not in flow.get("checks", []):
+        errors.append(f"integration data flow does not check data_lineage: {flow_id}")
+    evidence_file = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_file) if evidence_file.is_file() else {"runs": []}
+    candidates = [
+        run for run in evidence.get("runs", [])
+        if run.get("flow_id") == flow_id
+        and run.get("subflow_id") is None
+        and run.get("requirement_version") == loop["requirement_version"]
+        and run.get("validity") == "active"
+        and run.get("result") == "passed"
+    ]
+    if not candidates:
+        return errors + ["no active passed integration data evidence for the current requirement"]
+    candidate_errors = []
+    for run in candidates:
+        run_errors = []
+        lineage = run.get("data_lineage")
+        if not lineage:
+            candidate_errors.append(f"evidence {run.get('evidence_id')}: data_lineage is missing")
+            continue
+        sentinel = lineage["sentinel"]
+        observed = [
+            lineage["database"]["observed_sentinel"],
+            lineage["backend"]["observed_sentinel"],
+            lineage["frontend"]["observed_sentinel"],
+        ]
+        if any(value != sentinel for value in observed):
+            candidate_errors.append(f"evidence {run.get('evidence_id')}: database/API/UI sentinel mismatch")
+            continue
+        expected = (
+            ("database objects", set(declaration["database_objects"]), set(lineage["database"]["objects"])),
+            ("backend endpoints", set(declaration["backend_endpoints"]), set(lineage["backend"]["endpoints"])),
+            ("frontend routes", set(declaration["frontend_routes"]), set(lineage["frontend"]["routes"])),
+        )
+        missing = [label for label, wanted, actual in expected if not wanted.issubset(actual)]
+        if missing:
+            candidate_errors.append(f"evidence {run.get('evidence_id')}: integration data coverage is incomplete: {', '.join(missing)}")
+            continue
+        for layer in ("database", "backend", "frontend"):
+            run_errors.extend(evidence_path_errors(
+                root,
+                lineage[layer]["evidence_paths"],
+                f"evidence {run.get('evidence_id')} {layer} artifact",
+            ))
+        if not run_errors:
+            return errors
+        candidate_errors.extend(run_errors)
+    return errors + candidate_errors
+
+
 def load_prototype_matrix(root: Path, loop: dict) -> tuple[dict | None, list[str]]:
     if not prototype_is_required(loop) and not any(
         prototype_is_required(loop, subflow) for subflow in loop.get("subflows", [])
@@ -464,6 +536,7 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             errors.extend(prototype_preparation_errors(root, loop))
         if loop.get("state") in {"verified", "done"}:
             errors.extend(prototype_verification_errors(root, loop, flows))
+            errors.extend(integration_data_verification_errors(root, loop, flows))
         for subflow in loop.get("subflows", []):
             if subflow.get("state") in {
                 "developing", "ready_for_verification", "verifying", "passed"
@@ -594,6 +667,14 @@ def base_loop(
             "type": None,
             "fidelity": None,
             "pages": [],
+        },
+        "integration_data": {
+            "required": False,
+            "reason": "待需求确认；仅前后端对接且业务数据应来自数据库时启用",
+            "frontend_routes": [],
+            "backend_endpoints": [],
+            "database_objects": [],
+            "verification_flow_id": None,
         },
         "scope": {
             "claim": "active",
@@ -1111,6 +1192,9 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
                 errors.extend(prototype_verification_errors(
                     child_root, child_loop, runtime_flows(child_root)
                 ))
+                errors.extend(integration_data_verification_errors(
+                    child_root, child_loop, runtime_flows(child_root)
+                ))
     else:
         for subflow in loop["subflows"]:
             if subflow["state"] == "skipped" and subflow.get("skip_reason"):
@@ -1124,6 +1208,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
     integration = loop["integration_verification"]
     if integration["state"] not in {"not_required", "passed"}:
         errors.append("integration_verification is not complete")
+    errors.extend(integration_data_verification_errors(root, loop, flows))
     return errors
 
 
@@ -1135,6 +1220,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     errors = [] if target in allowed else [f"illegal transition: {current} -> {target}"]
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
+        errors.extend(integration_data_declaration_errors(loop))
     if target == "ready_for_development":
         if loop["gates"]["requirement_confirmation"]["status"] != "approved":
             errors.append("requirement_confirmation Gate is not approved")
@@ -1149,6 +1235,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("routing_confirmation Gate is pending")
     if target == "developing":
         errors.extend(prototype_preparation_errors(root, loop))
+        errors.extend(integration_data_declaration_errors(loop))
     if target == "orchestrating":
         if loop["execution_profile"]["level"] != "composite":
             errors.append("only composite/epic Loops enter orchestrating")
@@ -1177,6 +1264,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("no active passed evidence for the current requirement")
         if current == "verifying":
             errors.extend(prototype_verification_errors(root, loop, runtime_flows(root)))
+            errors.extend(integration_data_verification_errors(root, loop, runtime_flows(root)))
         elif current == "orchestrating":
             errors.extend(aggregation_errors(root, loop))
     if target == "done":
@@ -1244,10 +1332,13 @@ def cmd_evidence(args: argparse.Namespace) -> None:
         raise ValueError("--command-json must be a non-empty JSON string array")
     coverage = json.loads(args.coverage_json) if args.coverage_json else []
     visual = json.loads(args.visual_json) if args.visual_json else None
+    data_lineage = json.loads(args.data_lineage_json) if args.data_lineage_json else None
     if not isinstance(coverage, list):
         raise ValueError("--coverage-json must be a JSON array")
     if visual is not None and not isinstance(visual, dict):
         raise ValueError("--visual-json must be a JSON object")
+    if data_lineage is not None and not isinstance(data_lineage, dict):
+        raise ValueError("--data-lineage-json must be a JSON object")
     path = loop_dir(root, args.loop_id) / "evidence.yaml"
     evidence = load_yaml(path) if path.exists() else {
         "schema_version": 1,
@@ -1285,6 +1376,8 @@ def cmd_evidence(args: argparse.Namespace) -> None:
     }
     if visual is not None:
         run["visual"] = visual
+    if data_lineage is not None:
+        run["data_lineage"] = data_lineage
     evidence["runs"].append(run)
     errors = list(schema_validator("evidence.schema.json").iter_errors(evidence))
     if errors:
@@ -1490,6 +1583,7 @@ def parser() -> argparse.ArgumentParser:
     evidence.add_argument("--stderr-path")
     evidence.add_argument("--coverage-json")
     evidence.add_argument("--visual-json")
+    evidence.add_argument("--data-lineage-json")
     evidence.set_defaults(func=cmd_evidence)
 
     hook = commands.add_parser("hook")

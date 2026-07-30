@@ -99,10 +99,10 @@ epic
 | `clarifying` | 核对事实、目标、范围、验收和原型 | 需求 Agent | 需求产物完成，执行档位已重新判断并设为 `confirmed` |
 | `awaiting_requirement_confirmation` | 执行需求确认 Gate | 需求负责人或审批策略 | 有效人工事件，或自动确认条件全部满足 |
 | `ready_for_development` | 需求已确认，选择开发流程；复合/epic 在此完成总体编码前准备 | 开发 Agent 与协调者 | 普通 Loop 的 Git 基线和路由可用，或总体准备通过 |
-| `development_preparing` | 调查现有实现并完成编码前产物 | 开发 Agent | 编码前确认通过；`product-prototype` 的实现矩阵已通过 Schema 和逐页语义检查 |
+| `development_preparing` | 调查现有实现并完成编码前产物 | 开发 Agent | 编码前确认通过；`product-prototype` 的实现矩阵已通过检查；前后端数据链路已显式声明 |
 | `developing` | 编码、构建、静态检查和必要单元测试 | 开发 Agent | 开发自检完成；按验证策略直接验收或形成测试交接 |
 | `ready_for_verification` | 开发交付等待测试接收 | 测试 Agent | 测试路由和入口检查完成 |
-| `verifying` | 执行流程验证 | 测试 Agent | 全部必需流程有明确结果；原型/visual 场景覆盖矩阵无缺口 |
+| `verifying` | 执行流程验证 | 测试 Agent | 全部必需流程有明确结果；原型/visual 覆盖无缺口；启用时数据库→API→UI sentinel 证据完整 |
 | `orchestrating` | 调度、集成验证并聚合多个子流程或子 Loop | Loop 协调者 | 聚合规则满足，且不能只信任子单元的 passed/done 状态 |
 | `verified` | 必需验证已通过 | 完成策略 | 完成 Gate 通过 |
 | `done` | 本轮开发 AgentLoop 完成 | 无 | 终态 |
@@ -118,12 +118,12 @@ epic
 | `awaiting_requirement_confirmation` | `ready_for_development` | 有效审批事件或自动确认依据 |
 | `ready_for_development` | `development_preparing` | Git 基线和开发路由 |
 | `ready_for_development` | `orchestrating` | 总体编码前产物、切片/子 Loop、依赖、范围、Git 集成路线及 integration_verification 决定已检查 |
-| `development_preparing` | `developing` | 编码前产物及检查；产品原型流程必须有完整 `prototype-implementation-matrix` |
+| `development_preparing` | `developing` | 编码前产物及检查；产品原型流程有完整矩阵；`integration_data` 已显式声明且启用时范围完整 |
 | `developing` | `ready_for_verification` | 交付提交、开发自检和测试交接；技术研究可交付实验脚本、原始结果和决策记录 |
 | `developing` | `verified` | `routing.verification.policy == self_check` 且实际结果满足全部验收 |
 | `ready_for_verification` | `verifying` | 测试范围、复用流程和执行器 |
-| `verifying` | `verified` | 全部必需测试为 `passed`，原型覆盖、视觉证据和 automation 语义门禁通过 |
-| `orchestrating` | `verified` | composite 或 epic 的状态、原型覆盖、视觉证据、automation 和验收到证据映射全部满足 |
+| `verifying` | `verified` | 全部必需测试为 `passed`，原型/视觉门禁和启用的真实数据链路门禁通过 |
+| `orchestrating` | `verified` | composite 或 epic 的状态、原型/视觉证据、automation、验收到证据映射及真实数据链路门禁全部满足 |
 | `verified` | `done` | 完成 Gate 通过 |
 
 `trivial` 模式仍保存这些逻辑状态，但允许在一次执行循环内连续通过多个已满足的 Gate。选择 `self_check` 时不进入独立测试状态，直接由 `developing → verified`，但必须保存真实检查结果。项目只有同时显式启用自动需求确认和自动完成时，trivial 才能无人工停顿地单轮完成。
