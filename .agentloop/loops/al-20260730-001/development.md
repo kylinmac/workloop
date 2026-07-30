@@ -77,3 +77,16 @@ git diff --check
 ## 测试交接
 
 复验命令：`python3 plugins/development-process-agentloop/scripts/test_agentloop.py`。该命令包含完整插件生命周期和原型保真事故回归。
+
+## 需求版本 2：前后端真实数据链路
+
+适用边界仅为需要前后端对接、且业务数据按设计应从数据库读取的功能。编码前在 `loop.yaml` 明确 `integration_data.required`；启用时登记前端路由、后端接口、数据库对象和验证 flow。
+
+机器门禁复用现有 flow/evidence/状态转换入口：
+
+1. flow 必须包含 `data_lineage` 检查并指向可执行自动化。
+2. 测试通过 seed、factory 或 fixture 向隔离数据库写入唯一 sentinel。
+3. evidence 必须证明数据库、后端 API、前端页面观察到同一 sentinel，并覆盖声明的全部路由、接口和数据库对象。
+4. 缺失、覆盖不全或 sentinel 不一致时，`verifying -> verified` 和父级聚合均失败。
+
+静态界面文案、枚举和纯展示配置不属于业务数据，不触发该门禁。
