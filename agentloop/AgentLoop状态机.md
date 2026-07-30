@@ -30,7 +30,7 @@ Agent 不得把自己写入的字段冒充人工确认。
 
 ## 复合 Loop 主状态
 
-`execution_profile: composite` 在需求确认后使用：
+`execution_profile.level: composite` 在需求确认后使用：
 
 ```text
 ready_for_development
@@ -58,7 +58,13 @@ pending
 
 ```text
 全部子流程为 passed 或有依据的 skipped
++ integration_verification.state 为 not_required 或 passed
 → 主状态 orchestrating → verified
+
+全部子流程通过，但 integration_verification.required == true
++ integration_verification 尚未 passed
+→ 主状态保持 orchestrating
+→ 推进 integration_verification
 
 至少一个子流程可继续运行
 → 主状态保持 orchestrating
@@ -73,21 +79,21 @@ pending
 
 子流程可以开发与测试交错进行。例如 A 正在 `verifying`、B 正在 `developing`，主状态仍为 `orchestrating`。测试交接记录在各自的 `subflows[].verification_handoff`，不使用一份全局交接覆盖所有子流程。
 
-父子 Loop 的父 Loop 使用同一聚合原则：所有必需子 Loop 完成才可进入 `verified`。
+父子 Loop 的父 Loop 使用同一聚合原则：所有必需子 Loop 为 `done`（或有依据的 `skipped`），且父 Loop 的最终集成验证通过，才可进入 `verified`。
 
 ## 状态职责和出口
 
 | 状态 | 含义 | 主要负责人 | 出口条件 |
 |---|---|---|---|
-| `draft` | 已记录原始需求 | 需求 Agent | 原始问题、提出者和背景已记录 |
-| `clarifying` | 核对事实、目标、范围、验收和原型 | 需求 Agent | 当前执行模式要求的需求产物完成 |
+| `draft` | 已记录原始需求并完成初步复杂度分流 | 需求 Agent | 原始问题、背景及 `provisional` 执行档位已记录 |
+| `clarifying` | 核对事实、目标、范围、验收和原型 | 需求 Agent | 需求产物完成，执行档位已重新判断并设为 `confirmed` |
 | `awaiting_requirement_confirmation` | 执行需求确认 Gate | 需求负责人或审批策略 | 有效人工事件，或自动确认条件全部满足 |
 | `ready_for_development` | 需求已确认，允许选择开发流程 | 开发 Agent | Git 基线和路由输入可用 |
 | `development_preparing` | 调查现有实现并完成编码前产物 | 开发 Agent | 编码前确认通过 |
-| `developing` | 编码、构建、静态检查和必要单元测试 | 开发 Agent | 开发自检和测试交接完成 |
+| `developing` | 编码、构建、静态检查和必要单元测试 | 开发 Agent | 开发自检完成；按验证策略直接验收或形成测试交接 |
 | `ready_for_verification` | 开发交付等待测试接收 | 测试 Agent | 测试路由和入口检查完成 |
 | `verifying` | 执行流程验证 | 测试 Agent | 全部必需流程有明确结果 |
-| `orchestrating` | 调度并聚合多个子流程或子 Loop | 协调 Agent | 聚合规则满足 |
+| `orchestrating` | 调度、集成验证并聚合多个子流程或子 Loop | Loop 协调者 | 聚合规则满足 |
 | `verified` | 必需验证已通过 | 完成策略 | 完成 Gate 通过 |
 | `done` | 本轮开发 AgentLoop 完成 | 无 | 终态 |
 | `blocked` | 暂时无法继续 | 当前负责人 | 阻塞解除并重新检查 `resume_state` |
@@ -97,19 +103,31 @@ pending
 
 | 当前状态 | 目标状态 | 必需证据 |
 |---|---|---|
-| `draft` | `clarifying` | 原始需求记录 |
-| `clarifying` | `awaiting_requirement_confirmation` | 需求、验收、必要原型和一致性检查 |
+| `draft` | `clarifying` | 原始需求和 `provisional` 执行档位 |
+| `clarifying` | `awaiting_requirement_confirmation` | 需求、验收、必要原型、一致性检查和 `confirmed` 执行档位 |
 | `awaiting_requirement_confirmation` | `ready_for_development` | 有效审批事件或自动确认依据 |
 | `ready_for_development` | `development_preparing` | Git 基线和开发路由 |
 | `ready_for_development` | `orchestrating` | 复合拆分、依赖和范围已记录 |
 | `development_preparing` | `developing` | 编码前产物及检查 |
 | `developing` | `ready_for_verification` | 代码提交、开发自检和测试交接 |
+| `developing` | `verified` | `routing.verification.policy == self_check` 且实际结果满足全部验收 |
 | `ready_for_verification` | `verifying` | 测试范围、复用流程和执行器 |
 | `verifying` | `verified` | 全部必需测试为 `passed` |
-| `orchestrating` | `verified` | 全部必需子流程或子 Loop 为 `passed/skipped` |
+| `orchestrating` | `verified` | 子流程为 `passed/skipped`，子 Loop 为 `done/skipped`，且集成验证为 `not_required/passed` |
 | `verified` | `done` | 完成 Gate 通过 |
 
-`trivial` 模式仍保存这些逻辑状态，但允许在一次执行循环内连续通过多个已满足的 Gate，不需要为每个状态人工停顿或创建独立文件。
+`trivial` 模式仍保存这些逻辑状态，但允许在一次执行循环内连续通过多个已满足的 Gate。选择 `self_check` 时不进入独立测试状态，直接由 `developing → verified`，但必须保存真实检查结果。
+
+## Loop 编排职责
+
+每个非终态 Loop 必须有一个 `owners.coordination`。Loop 协调者负责：
+
+- 决定当前推进哪个状态、子流程或子 Loop
+- 获取锁、检查范围冲突、交接任务并聚合状态
+- 保证角色权限、需求版本、Git 和证据一致
+- 在 Gate、低置信度和阻塞处停止
+
+协调者没有需求确认权或测试通过权，除非它同时被明确授予对应角色。同一个 Agent 可以顺序切换多个角色，但每次操作必须以实际角色记录 `actor`；多个 Agent 协作时只有协调者更新主状态，当前负责人更新自己的产物后交接。
 
 ## Git 基线门禁
 
@@ -134,6 +152,15 @@ pending
 → development_preparing
 → 更新路由和编码前产物后重新进入 developing
 
+开发中发现 execution_profile 低估复杂度，但需求范围和验收未变
+→ development_preparing
+→ 只允许 trivial → standard → composite 升级
+→ 迁移规范文件并更新路由
+
+execution_profile 变化同时改变范围或验收
+→ clarifying
+→ requirement_version 加一并重新确认
+
 设计改变范围、核心流程或验收标准
 → clarifying
 → 需求版本加一并重新确认
@@ -150,6 +177,11 @@ pending
 
 测试发现需求或预期错误
 → clarifying
+
+集成验证发现切片组合错误
+→ 标记 integration_verification: failed
+→ 按证据将受影响子流程退回 developing
+→ 无法归属时 blocked，交由协调者拆解
 ```
 
 复合 Loop 对当前子流程执行同样退回，父状态保持 `orchestrating`；只有整体需求改变时，父状态退回 `clarifying`。
@@ -192,7 +224,7 @@ loop_id
 自动需求确认只在项目配置为 `auto_high_confidence`，且同时满足以下条件时允许：
 
 ```text
-execution_profile == trivial
+execution_profile.level == trivial
 + approval.requirement_confirmation.confidence >= minimum_confidence
 + classification.tags 不包含 forbidden_tags
 + trivial 资格条件全部满足
@@ -223,8 +255,9 @@ blocked:
 
 ```text
 所有必需验证通过
-+ 所有必需子流程或子 Loop 聚合通过
-+ 当前需求版本的产物和证据有效
++ 所有必需子流程为 passed/skipped、子 Loop 为 done/skipped
++ 必需集成验证通过
++ 当前验证策略要求的产物、自检记录和证据有效
 + completion Gate 通过
 + Git 检查点可查询
 + 无未处理阻塞
