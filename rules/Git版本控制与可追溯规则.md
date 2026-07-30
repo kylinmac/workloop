@@ -47,6 +47,7 @@ AgentLoop 对项目的修改必须由实际版本控制记录，不依赖 AI 对
 ```yaml
 git:
   root:
+  target_branch:
   branch:
   worktree:
   head_commit:
@@ -65,7 +66,7 @@ git:
 
 ## AgentLoop 修改记录
 
-每个可独立完成的小流程在 `loop.yaml.git.checkpoints` 至少记录：
+每个可独立完成的开发切片在 `loop.yaml.git.checkpoints` 至少记录：
 
 ```yaml
 - subflow_id:
@@ -79,10 +80,10 @@ git:
 修改应形成小而明确的提交。提交信息建议使用：
 
 ```text
-agentloop(<loop_id>/<subflow_id>@r<requirement_version>): <本次小流程完成的结果>
+agentloop(<loop_id>/<subflow_id>@r<requirement_version>): <本次开发切片完成的结果>
 ```
 
-一个提交只包含当前小流程的相关变化，不混入用户已有修改或无关格式化。
+一个提交只包含当前开发切片的相关变化，不混入用户已有修改或无关格式化。
 
 ## 多 Loop 与并发
 
@@ -97,6 +98,59 @@ agentloop(<loop_id>/<subflow_id>@r<requirement_version>): <本次小流程完成
 
 不得让两个 Loop 在同一工作树中交错修改后再猜测提交归属。父子 Loop 和复合子流程的分支、worktree、范围和检查点记录在各自规范字段中。
 
+## 复合 Loop 的切片合并
+
+复合 Loop 使用一条独立集成分支和 worktree。切片不得直接合并到项目 `target_branch`。
+
+```text
+切片在 source_commit 上验证 passed
+→ 协调者把 source_commit 加入 git.integration.merges
+→ 按依赖顺序合并到 Loop 集成分支
+→ 全部切片合并后，在集成 head 上重跑各切片的定向验证
+→ 形成 integration_verification.handoff
+→ 在同一个 integration head 上执行跨切片验证
+```
+
+默认使用项目配置的 `merge_no_ff`，保留切片提交历史。合并只能由 `owners.coordination` 在持有 Loop 锁和集成 worktree 时执行；协调者若要修改业务代码，必须切换为开发角色。
+
+### 合并冲突
+
+```text
+合并产生冲突
+→ 中止未完成的合并，集成工作树恢复到原 head
+→ merges[].status: conflict
+→ 保存冲突文件和相关切片
+→ 受影响切片回到 developing
+→ 开发 Agent 基于当前集成 head 解决冲突
+→ 重新开发自检和切片验证
+→ 产生新的 source_commit
+→ 旧合并项 superseded，重新排队
+```
+
+协调者不得在没有开发验证的情况下直接解决冲突并继续。文本无冲突也可能有行为冲突，因此全部合并后必须在最终集成提交上重跑各切片的 `targeted/flow` 检查；允许合并同一命令批量执行，但每个切片都要有结果归属。
+
+同一合并项每次使用新的已验证 `source_commit` 重试时增加 `attempts`；达到 `max_attempts` 仍冲突则父 Loop `blocked`，不得无限反复合并。
+
+合并后检查全部通过且不需要跨切片验证时，将 `git.integration.status` 设为 `verified`；需要跨切片验证时先设为 `ready_for_verification`，集成验证通过后再设为 `verified`。
+
+### 集成提交与目标分支
+
+`integration_verification.handoff.code_commit` 必须等于测试开始时的 `git.integration.head_commit`。测试期间该分支有新提交时，原集成证据立即失效并重新执行。
+
+```text
+delivery_mode == verified_integration_branch
+→ AgentLoop 以已验证 integration head 作为开发交付提交
+→ 不在本 Loop 内合并项目 target_branch
+
+delivery_mode == merge_to_target_after_verified
+→ 协调者把已验证 integration head 合并到 target_branch
+→ 记录 delivery_commit
+→ target_branch 已前进或合并结果产生新内容时
+    → 在 delivery_commit 上重跑合并后检查和集成验证
+```
+
+受保护分支需要的 PR 或人工批准仍是外部 Gate，不得绕过。无论采用哪种交付模式，最终交付都必须指向一个包含全部必需切片、且实际通过验证的精确提交。
+
 ## 提交时机
 
 至少在以下节点形成 Git 检查点：
@@ -105,7 +159,11 @@ agentloop(<loop_id>/<subflow_id>@r<requirement_version>): <本次小流程完成
 非 Git 项目完成初始化
 → 初始基线提交
 
-一个可独立开发的小流程完成开发自检
+需求准备进入确认 Gate
+→ 需求产物检查点
+→ 审批摘要只绑定该检查点中的文件字节
+
+一个可独立开发的切片完成开发自检
 → 开发提交
 
 测试代码或流程定义发生新增、修改
