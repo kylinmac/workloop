@@ -1,0 +1,35 @@
+{
+  "algorithm": "sha256-control-v1",
+  "digest": "d304659b1bdc9e6cf0e386944fe51e430b1ceb8a9cb3a284c84d2f61b730e5fe",
+  "payload": {
+    "state": "verified",
+    "gates": {
+      "requirement_confirmation": {
+        "status": "approved",
+        "event_id": "gate-003",
+        "subject_digest": "09e75c83ad7f39e56ad915e45bf350ca7e318bd9857a9b844b2a82c8bdfd9423"
+      },
+      "routing_confirmation": {
+        "status": "not_required",
+        "event_id": null,
+        "subject_digest": null
+      },
+      "completion": {
+        "status": "pending",
+        "event_id": null,
+        "subject_digest": null
+      },
+      "destructive_action": {
+        "status": "not_required",
+        "event_id": null,
+        "subject_digest": null
+      }
+    },
+    "subflows": {},
+    "evidence_validity": {
+      "al-20260730-001-evidence-01": "stale",
+      "al-20260730-001-evidence-02": "stale",
+      "al-20260730-001-evidence-03": "active"
+    }
+  }
+}

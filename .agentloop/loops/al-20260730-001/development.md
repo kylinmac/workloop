@@ -90,3 +90,7 @@ git diff --check
 4. 缺失、覆盖不全或 sentinel 不一致时，`verifying -> verified` 和父级聚合均失败。
 
 静态界面文案、枚举和纯展示配置不属于业务数据，不触发该门禁。
+
+## 需求版本 3：实现方案
+
+在共享控制入口一次完成四项修复：扩展 prototype matrix 并解析 OpenAPI operation；将视觉与业务功能证据独立校验；让 evidence 命令实际运行测试并读取新生成的 commit-bound 报告；实现 `transition --subflow-id` 和受控字段快照恢复。新增一个生产预算系统回归，覆盖契约缺失失败、完整持久化旅程通过、直接状态篡改被恢复及子流程命令真实推进。

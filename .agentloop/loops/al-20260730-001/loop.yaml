@@ -2,14 +2,14 @@ schema_version: 1
 loop_id: al-20260730-001
 loop_kind: delivery
 parent_loop_id: null
-title: 完善 AgentLoop 原型与前后端数据门禁
+title: 完善 AgentLoop 原型业务完成与控制可信门禁
 execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
 state: verified
-requirement_version: 2
-updated_at: '2026-07-31T00:41:48+08:00'
+requirement_version: 3
+updated_at: '2026-07-31T01:00:09+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -53,8 +53,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-002
-    subject_digest: 503f95debacc276f69187a71f7fcf233c5704cfec1140090ce91480f40836cce
+    event_id: gate-003
+    subject_digest: 09e75c83ad7f39e56ad915e45bf350ca7e318bd9857a9b844b2a82c8bdfd9423
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -105,15 +105,31 @@ gate_events:
   reason: 用户明确限定适用范围与数据库→接口→页面展示链路
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-003
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-chat
+  source_event_id: user-product-business-control-gates-20260731
+  requirement_version: 3
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: 159e1b67406b78e0611fe352d63b9257ef42e76f1346c4e4a5add7194b8a378d
+  artifact_digest: 09e75c83ad7f39e56ad915e45bf350ca7e318bd9857a9b844b2a82c8bdfd9423
+  at: '2026-07-31T00:48:53+08:00'
+  reason: 用户确认同时修复产品原型业务完成门禁和控制检查漏洞
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
   branch: main
   worktree: .
-  head_commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
+  head_commit: a50d207bdf48341975c18469bdf4e7611e440c59
   working_tree_status: dirty
-  baseline_commit: 8f96a89cb6f2bee195c3b5576841198395c61e63
-  last_checkpoint_commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
+  baseline_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+  last_checkpoint_commit: a50d207bdf48341975c18469bdf4e7611e440c59
   checkpoints:
   - requirement_version: 1
     commit: 9bd8823
@@ -121,28 +137,35 @@ git:
   - requirement_version: 2
     commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
     reason: 前后端数据库到页面真实数据链路门禁
+  - requirement_version: 3
+    commit: a50d207bdf48341975c18469bdf4e7611e440c59
+    reason: 产品原型业务完成、可信 Evidence、子流程状态与防篡改门禁
   integration:
     status: verified
-    base_commit: 8f96a89cb6f2bee195c3b5576841198395c61e63
-    head_commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
+    base_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+    head_commit: a50d207bdf48341975c18469bdf4e7611e440c59
     merges: []
     post_merge_checks: []
-    delivery_commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
+    delivery_commit: a50d207bdf48341975c18469bdf4e7611e440c59
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T00:34:07+08:00'
-  decided_by: codex
+  decided_at: '2026-07-31T00:48:53+08:00'
+  decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 在统一状态转换与证据聚合入口增加真实数据链路门禁
-    supporting_flows: []
+    reason: 文档约束未在统一控制入口执行，需修复 Schema、transition 和 evidence runner
+    supporting_flows:
+    - data-contract
+    - business-process
     required_outputs:
-    - 前后端真实数据链路机器门禁
-    - 数据库→API→UI sentinel 回归
+    - 原型业务功能与 OpenAPI 门禁
+    - 可信 Evidence runner
+    - Composite 子流程状态机
+    - 受控字段防篡改摘要
   verification:
     policy: targeted
-    reason: 规则、Schema、控制脚本与回归测试定向覆盖
+    reason: 失败样例和完整用户旅程通过样例覆盖全部门禁
     reused_flows: []
     new_flows: []
     executors: {}
@@ -182,32 +205,41 @@ integration_verification:
   executors: {}
   verification_failure_roundtrips: 0
 verification_handoff:
-  requirement_version: 2
-  code_commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
+  requirement_version: 3
+  code_commit: a50d207bdf48341975c18469bdf4e7611e440c59
   implemented_flows:
-  - integration-data-lineage-gate
+  - production-prototype-business-gate
+  - trusted-evidence-runner
+  - controlled-subflow-transition
   changed_files:
-  - agentloop/schemas/loop.schema.json
+  - agentloop/schemas/prototype-matrix.schema.json
   - agentloop/schemas/evidence.schema.json
+  - agentloop/schemas/loop.schema.json
   - plugins/development-process-agentloop/scripts/agentloop.py
-  - plugins/development-process-agentloop/scripts/test_integration_data_source.py
+  - plugins/development-process-agentloop/scripts/test_production_prototype_gate.py
   changed_interfaces:
-  - loop.yaml integration_data
-  - evidence.yaml data_lineage
+  - prototype interaction to OpenAPI operation
+  - evidence command executes automation and derives report
+  - transition --subflow-id
+  - .agentloop/control snapshot
   changed_data: []
   changed_states:
-  - awaiting_requirement_confirmation
+  - development_preparing
   - developing
+  - verifying
+  - orchestrating
   - verified
   affected_existing_flows:
-  - AgentLoop 状态转换
+  - product-prototype
+  - UI verification
+  - composite orchestration
   invariant_behaviors:
-  - 非前后端数据需求不启用真实数据链路门禁
+  - 非产品原型流程保持原验证策略
   suggested_checks:
   - python3 plugins/development-process-agentloop/scripts/test_agentloop.py
   test_accounts: []
   test_data:
-  - 隔离数据库唯一 sentinel
+  - 生产预算完整用户旅程 fixture
   environment_requirements:
   - Python 3
   - Git
@@ -376,3 +408,77 @@ transitions:
   evidence:
   - al-20260730-001-evidence-02
   reason: Schema、控制门禁、失败/通过回归和已安装插件复验全部通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T00:47:32+08:00'
+  requirement_version: 2
+  git_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+  evidence: []
+  reason: 新增产品原型业务完成门禁与控制层防篡改要求
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T00:48:53+08:00'
+  requirement_version: 3
+  git_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+  evidence: []
+  reason: 两组控制门禁需求已形成可执行验收标准
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T00:48:53+08:00'
+  requirement_version: 3
+  git_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+  evidence: []
+  reason: 需求版本 3 已确认
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T00:48:53+08:00'
+  requirement_version: 3
+  git_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+  evidence: []
+  reason: 开始准备控制层根因修复
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T00:57:43+08:00'
+  requirement_version: 3
+  git_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
+  evidence: []
+  reason: Schema、可信 Evidence、子流程状态和防篡改方案已完成编码前设计
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T00:59:36+08:00'
+  requirement_version: 3
+  git_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+  evidence:
+  - commit:a50d207bdf48341975c18469bdf4e7611e440c59
+  reason: 两组控制门禁实现、回归和提交完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T00:59:37+08:00'
+  requirement_version: 3
+  git_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+  evidence: []
+  reason: 接收生产原型业务与控制可信门禁交付
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T01:00:09+08:00'
+  requirement_version: 3
+  git_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+  evidence:
+  - al-20260730-001-evidence-03
+  reason: 契约缺失、持久化旅程、可信报告、子流程推进和篡改恢复回归全部通过

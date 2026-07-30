@@ -41,12 +41,37 @@ runs:
     passed: 1
     failed: 0
     skipped: 0
-  validity: active
+  validity: stale
   code_commit: 658b2153dccbbd12afd4a8954fedc97eb4485698
   environment: local
   started_at: '2026-07-31T00:41:42+08:00'
   ended_at: '2026-07-31T00:41:42+08:00'
   duration_ms: 8100
+  stdout_path: null
+  stderr_path: null
+  coverage: []
+  artifacts: []
+- evidence_id: al-20260730-001-evidence-03
+  flow_id: null
+  check_id: production-prototype-control-regression
+  subflow_id: null
+  requirement_version: 3
+  executor: command
+  command:
+  - python3
+  - plugins/development-process-agentloop/scripts/test_agentloop.py
+  result: passed
+  exit_code: 0
+  counts:
+    passed: 1
+    failed: 0
+    skipped: 0
+  validity: active
+  code_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+  environment: local
+  started_at: '2026-07-31T00:59:54+08:00'
+  ended_at: '2026-07-31T01:00:03+08:00'
+  duration_ms: 8715
   stdout_path: null
   stderr_path: null
   coverage: []
