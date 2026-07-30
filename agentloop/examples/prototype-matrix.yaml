@@ -1,0 +1,29 @@
+schema_version: 1
+loop_id: al-20260730-007
+requirement_version: 1
+pages:
+  - prototype_path: design/01-dashboard.html
+    route: /dashboard
+    subflow_id: sf-01-dashboard
+    regions:
+      - region_id: summary
+        layout: 三列指标卡，桌面端同排
+        required_controls:
+          - control_id: detail-link
+            description: 查看详情链接
+    interactions:
+      - interaction_id: open-detail
+        region_id: summary
+        control_id: detail-link
+        action: 点击查看详情
+        state_change: 跳转到 /dashboard/detail
+        acceptance_ids: [AC-UI-01]
+    states:
+      loading: 显示骨架屏
+      empty: 显示空数据说明
+      error: 显示重试入口
+      unauthorized: 跳转 403 页面
+    data_sources: [GET /api/dashboard]
+    permissions: [dashboard:view]
+    responsive: [宽度小于 768px 时指标卡单列]
+    allowed_deviations: []

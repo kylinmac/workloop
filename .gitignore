@@ -1,1 +1,4 @@
 .DS_Store
+.agentloop/locks/
+__pycache__/
+*.pyc

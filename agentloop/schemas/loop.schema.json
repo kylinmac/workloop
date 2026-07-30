@@ -1,0 +1,472 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentloop.local/schemas/loop.schema.json",
+  "title": "AgentLoop loop.yaml",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "loop_id", "loop_kind", "title", "execution_profile", "state",
+    "requirement_version", "updated_at", "owners", "classification", "scope", "gates",
+    "gate_events", "git", "routing", "files", "execution", "subflows", "child_loops",
+    "integration_verification", "artifacts", "transitions"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "loop_id": {"type": "string", "pattern": "^al-[0-9]{8}-[0-9]{3}$"},
+    "loop_kind": {"enum": ["delivery", "epic"]},
+    "parent_loop_id": {"type": ["string", "null"]},
+    "title": {"type": "string", "minLength": 1},
+    "execution_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "status", "reason"],
+      "properties": {
+        "level": {"enum": ["trivial", "standard", "composite"]},
+        "status": {"enum": ["provisional", "confirmed"]},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "state": {
+      "enum": [
+        "draft", "clarifying", "awaiting_requirement_confirmation", "ready_for_development",
+        "development_preparing", "developing", "ready_for_verification", "verifying",
+        "orchestrating", "verified", "done", "blocked", "cancelled"
+      ]
+    },
+    "requirement_version": {"type": "integer", "minimum": 1},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "owners": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coordination", "requirement", "development", "verification"],
+      "properties": {
+        "coordination": {"type": "string"},
+        "requirement": {"type": "string"},
+        "development": {"type": "string"},
+        "verification": {"type": "string"}
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_type", "tags"],
+      "properties": {
+        "primary_type": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "prototype": {"$ref": "#/$defs/prototype"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "gates": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/gate"},
+      "required": ["requirement_confirmation", "routing_confirmation", "completion", "destructive_action"]
+    },
+    "gate_events": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/gate_event"}
+    },
+    "git": {"$ref": "#/$defs/git"},
+    "routing": {"$ref": "#/$defs/routing"},
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "work": {"type": "string"},
+        "requirement": {"type": "string"},
+        "development": {"type": "string"},
+        "evidence": {"type": "string"},
+        "prototype_matrix": {"type": "string"}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_id", "subflow_id", "step_id", "status", "operation", "inputs", "expected_outputs", "check", "idempotency", "attempt", "max_attempts", "last_error"],
+      "properties": {
+        "execution_id": {"type": ["string", "null"]},
+        "subflow_id": {"type": ["string", "null"]},
+        "step_id": {"type": ["string", "null"]},
+        "status": {"type": ["string", "null"]},
+        "operation": {"type": ["string", "null"]},
+        "inputs": {"type": "array"},
+        "expected_outputs": {"type": "array"},
+        "check": {"type": ["string", "null"]},
+        "idempotency": {"type": ["string", "null"]},
+        "attempt": {"type": "integer", "minimum": 0},
+        "max_attempts": {"type": "integer", "minimum": 1},
+        "last_error": {"type": ["string", "null"]}
+      }
+    },
+    "verification_control": {
+      "type": ["object", "null"],
+      "properties": {
+        "failure_roundtrips": {"type": "integer", "minimum": 0},
+        "max_failure_roundtrips": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "subflows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/subflow"}
+    },
+    "child_loops": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/child_loop"}
+    },
+    "integration_verification": {"$ref": "#/$defs/integration_verification"},
+    "verification_handoff": {"type": ["object", "null"]},
+    "failure_handoff": {"type": ["object", "null"]},
+    "artifacts": {"type": "array", "items": {"type": "object"}},
+    "blocked": {
+      "type": ["object", "null"],
+      "properties": {
+        "reason": {"type": ["string", "null"]},
+        "owner": {"type": ["string", "null"]},
+        "unblock_condition": {"type": ["string", "null"]},
+        "resume_state": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "actor", "at", "requirement_version", "reason"],
+        "properties": {
+          "from": {"type": ["string", "null"]},
+          "to": {"type": "string"},
+          "subflow_id": {"type": ["string", "null"]},
+          "actor": {"type": "string"},
+          "at": {"type": "string", "format": "date-time"},
+          "requirement_version": {"type": "integer", "minimum": 1},
+          "git_commit": {"type": ["string", "null"]},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "reason": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"loop_kind": {"const": "epic"}}},
+      "then": {
+        "properties": {
+          "execution_profile": {"properties": {"level": {"const": "composite"}}},
+          "subflows": {"maxItems": 0},
+          "child_loops": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "loop_kind": {"const": "delivery"},
+          "execution_profile": {"properties": {"level": {"const": "composite"}}}
+        }
+      },
+      "then": {
+        "properties": {
+          "subflows": {"minItems": 1},
+          "child_loops": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"execution_profile": {"properties": {"level": {"const": "trivial"}}}}},
+      "then": {
+        "properties": {
+          "files": {"required": ["work"]},
+          "routing": {
+            "properties": {
+              "development": {"properties": {"main_flow": {"const": "quick-change"}}}
+            }
+          },
+          "subflows": {"maxItems": 0},
+          "child_loops": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "prototype": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation_basis", "type", "fidelity", "pages"],
+      "properties": {
+        "implementation_basis": {"type": "boolean"},
+        "type": {"enum": [null, "wireframe", "interactive", "high_fidelity"]},
+        "fidelity": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["structure", "visual", "interaction", "content"],
+          "properties": {
+            "structure": {"enum": ["strict", "adjustable", "reference"]},
+            "visual": {"enum": ["strict", "adjustable", "reference"]},
+            "interaction": {"enum": ["strict", "adjustable", "reference"]},
+            "content": {"enum": ["strict", "adjustable", "reference"]}
+          }
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["prototype_path", "route", "acceptance", "allowed_deviations"],
+            "properties": {
+              "prototype_path": {"type": "string", "minLength": 1},
+              "route": {"type": "string", "minLength": 1},
+              "acceptance": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["acceptance_id", "criterion"],
+                  "properties": {
+                    "acceptance_id": {"type": "string", "minLength": 1},
+                    "criterion": {"type": "string", "minLength": 1}
+                  }
+                }
+              },
+              "allowed_deviations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["content", "reason"],
+                  "properties": {
+                    "content": {"type": "string", "minLength": 1},
+                    "reason": {"type": "string", "minLength": 1}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"implementation_basis": {"const": true}}},
+          "then": {
+            "properties": {
+              "type": {"enum": ["wireframe", "interactive", "high_fidelity"]},
+              "fidelity": {"type": "object"},
+              "pages": {"minItems": 1}
+            }
+          },
+          "else": {
+            "properties": {
+              "type": {"type": "null"},
+              "fidelity": {"type": "null"},
+              "pages": {"maxItems": 0}
+            }
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "paths", "interfaces", "db_objects", "states"],
+      "properties": {
+        "claim": {"enum": ["active", "released"]},
+        "claimed_at": {"type": ["string", "null"], "format": "date-time"},
+        "paths": {"type": "array", "items": {"type": "string"}},
+        "interfaces": {"type": "array", "items": {"type": "string"}},
+        "db_objects": {"type": "array", "items": {"type": "string"}},
+        "states": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "mode", "event_id", "subject_digest"],
+      "properties": {
+        "gate_id": {"type": "string"},
+        "status": {"enum": ["not_required", "pending", "approved", "rejected"]},
+        "mode": {"type": ["string", "null"]},
+        "confidence": {"type": ["string", "null"]},
+        "event_id": {"type": ["string", "null"]},
+        "subject_digest": {"type": ["string", "null"]},
+        "operation_digest": {"type": ["string", "null"]},
+        "inheritance": {"type": ["object", "null"]}
+      }
+    },
+    "gate_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "gate_id", "decision", "actor", "source", "source_event_id", "requirement_version", "subject_files", "artifact_digest", "at"],
+      "properties": {
+        "event_id": {"type": "string"},
+        "gate_id": {"type": "string"},
+        "decision": {"enum": ["approved", "rejected"]},
+        "actor": {"type": "string"},
+        "source": {"type": "string"},
+        "source_event_id": {"type": "string"},
+        "requirement_version": {"type": "integer", "minimum": 1},
+        "digest_algorithm": {"const": "sha256-manifest-v1"},
+        "subject_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string"},
+              "sha256": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "artifact_digest": {"type": "string"},
+        "at": {"type": "string", "format": "date-time"},
+        "reason": {"type": ["string", "null"]},
+        "affected_pages": {"type": "array", "items": {"type": "string"}},
+        "revalidation_scope": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "git": {
+      "type": "object",
+      "required": ["root", "target_branch", "branch", "worktree", "head_commit", "working_tree_status", "baseline_commit", "last_checkpoint_commit", "checkpoints", "integration"],
+      "properties": {
+        "root": {"type": "string"},
+        "target_branch": {"type": "string"},
+        "branch": {"type": "string"},
+        "worktree": {"type": "string"},
+        "head_commit": {"type": ["string", "null"]},
+        "working_tree_status": {"type": "string"},
+        "baseline_commit": {"type": "string"},
+        "last_checkpoint_commit": {"type": ["string", "null"]},
+        "checkpoints": {"type": "array", "items": {"type": "object"}},
+        "integration": {
+          "type": "object",
+          "required": ["status", "base_commit", "head_commit", "merges", "post_merge_checks", "delivery_commit"],
+          "properties": {
+            "status": {"enum": ["pending", "merging", "ready_for_verification", "verified", "conflict"]},
+            "base_commit": {"type": ["string", "null"]},
+            "head_commit": {"type": ["string", "null"]},
+            "merges": {"type": "array", "items": {"type": "object"}},
+            "post_merge_checks": {"type": "array", "items": {"type": "object"}},
+            "delivery_commit": {"type": ["string", "null"]}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "routing": {
+      "type": "object",
+      "required": ["status", "confidence", "decided_at", "decided_by", "development", "verification"],
+      "properties": {
+        "status": {"enum": ["pending", "decided"]},
+        "confidence": {"enum": ["low", "medium", "high"]},
+        "decided_at": {"type": ["string", "null"], "format": "date-time"},
+        "decided_by": {"type": ["string", "null"]},
+        "development": {
+          "type": "object",
+          "required": ["main_flow", "reason", "supporting_flows", "required_outputs"],
+          "properties": {
+            "main_flow": {"enum": ["quick-change", "product-prototype", "business-process", "data-contract", "domain-model", "architecture", "root-cause", "migration-compatibility", "technical-validation"]},
+            "reason": {"type": "string"},
+            "supporting_flows": {"type": "array", "items": {"type": "string"}},
+            "required_outputs": {"type": "array", "items": {"type": "string"}}
+          },
+          "additionalProperties": false
+        },
+        "verification": {"$ref": "#/$defs/verification"}
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": ["policy", "reason", "reused_flows", "new_flows", "executors"],
+      "properties": {
+        "policy": {"enum": ["self_check", "targeted", "flow"]},
+        "reason": {"type": "string"},
+        "reused_flows": {"type": "array", "items": {"type": "string"}},
+        "new_flows": {"type": "array", "items": {"type": "string"}},
+        "executors": {"type": "object", "additionalProperties": {"type": "array", "items": {"enum": ["code", "ui", "command"]}}}
+      },
+      "additionalProperties": false
+    },
+    "subflow": {
+      "type": "object",
+      "required": ["subflow_id", "title", "required", "acceptance_ids", "deliverable", "requirement_version", "state", "dependencies", "scope", "git", "verification", "verification_failure_roundtrips"],
+      "properties": {
+        "subflow_id": {"type": "string"},
+        "title": {"type": "string"},
+        "required": {"type": "boolean"},
+        "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "deliverable": {"type": "string"},
+        "requirement_version": {"type": "integer", "minimum": 1},
+        "state": {"enum": ["pending", "development_preparing", "developing", "ready_for_verification", "verifying", "passed", "failed", "blocked", "skipped"]},
+        "state_reason": {"type": ["string", "null"]},
+        "skip_reason": {"type": ["string", "null"]},
+        "main_flow": {"type": "string"},
+        "dependencies": {"type": "array", "items": {"type": "string"}},
+        "scope": {"$ref": "#/$defs/scope"},
+        "git": {"type": "object"},
+        "verification": {"$ref": "#/$defs/verification"},
+        "verification_handoff": {"type": ["object", "null"]},
+        "failure_handoff": {"type": ["object", "null"]},
+        "prototype_pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["prototype_path", "route"],
+            "properties": {
+              "prototype_path": {"type": "string", "minLength": 1},
+              "route": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "verification_failure_roundtrips": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "child_loop": {
+      "type": "object",
+      "required": ["loop_id", "required", "acceptance_ids", "deliverable", "requirement_version", "dependencies", "repository_id", "project_root", "skip_reason", "scope"],
+      "properties": {
+        "loop_id": {"type": "string"},
+        "required": {"type": "boolean"},
+        "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "deliverable": {"type": "string"},
+        "requirement_version": {"type": "integer", "minimum": 1},
+        "dependencies": {"type": "array", "items": {"type": "string"}},
+        "repository_id": {"type": "string"},
+        "project_root": {"type": "string"},
+        "loop_file": {"type": ["string", "null"]},
+        "loop_uri": {"type": ["string", "null"]},
+        "skip_reason": {"type": ["string", "null"]},
+        "scope": {"type": "object"}
+      },
+      "oneOf": [
+        {"properties": {"loop_file": {"type": "string"}, "loop_uri": {"type": "null"}}, "required": ["loop_file", "loop_uri"]},
+        {"properties": {"loop_file": {"type": "null"}, "loop_uri": {"type": "string"}}, "required": ["loop_file", "loop_uri"]}
+      ],
+      "additionalProperties": false
+    },
+    "integration_verification": {
+      "type": "object",
+      "required": ["required", "reason", "decided_by", "decided_at", "dependencies", "state", "handoff", "failure_handoff", "reused_flows", "new_flows", "executors", "verification_failure_roundtrips"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "decided_by": {"type": "string"},
+        "decided_at": {"type": "string", "format": "date-time"},
+        "dependencies": {"type": "array", "items": {"type": "string"}},
+        "state": {"enum": ["not_required", "pending", "ready_for_verification", "verifying", "passed", "failed", "blocked"]},
+        "handoff": {"type": "object"},
+        "failure_handoff": {"type": "object"},
+        "reused_flows": {"type": "array", "items": {"type": "string"}},
+        "new_flows": {"type": "array", "items": {"type": "string"}},
+        "executors": {"type": "object"},
+        "verification_failure_roundtrips": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  }
+}

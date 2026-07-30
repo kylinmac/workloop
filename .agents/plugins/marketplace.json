@@ -1,0 +1,20 @@
+{
+  "name": "development-process",
+  "interface": {
+    "displayName": "Development Process"
+  },
+  "plugins": [
+    {
+      "name": "development-process-agentloop",
+      "source": {
+        "source": "local",
+        "path": "./plugins/development-process-agentloop"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

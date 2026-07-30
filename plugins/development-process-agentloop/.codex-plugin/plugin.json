@@ -1,0 +1,21 @@
+{
+  "name": "development-process-agentloop",
+  "version": "0.1.0+codex.20260730151843",
+  "description": "Run repository development work through the AgentLoop protocol.",
+  "author": {
+    "name": "Development Process"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Development Process AgentLoop",
+    "shortDescription": "Route, execute, verify, and recover development loops.",
+    "longDescription": "Applies the repository AgentLoop state machine, Gates, verification policy, Git rules, and recovery protocol inside Codex.",
+    "developerName": "Development Process",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": "Use AgentLoop to handle this development request from classification through verified completion."
+  }
+}

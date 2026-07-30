@@ -1,0 +1,44 @@
+schema_version: 1
+project_id: development-process
+project_root: .
+approval:
+  requirement_confirmation:
+    mode: manual
+    minimum_confidence: high
+    forbidden_tags:
+    - security-compliance
+    - data-change
+    - external-integration
+    - compatibility
+  routing_confirmation:
+    mode: manual_on_low_confidence
+  completion:
+    mode: human_acceptance
+  destructive_actions:
+    mode: always_manual
+verification_policy:
+  defaults:
+    trivial: self_check
+    standard: targeted
+    composite: flow
+  self_check_forbidden_tags:
+  - workflow-state
+  - data-change
+  - external-integration
+  - security-compliance
+  - compatibility
+execution:
+  workdir: .
+  default_timeout_seconds: 120
+  max_verification_failure_roundtrips: 3
+  concurrency: separate_worktree
+git:
+  slice_merge_strategy: merge_no_ff
+  delivery_mode: verified_integration_branch
+commands: {}
+paths:
+  source: []
+  tests: []
+  protected:
+  - .env
+  - secrets

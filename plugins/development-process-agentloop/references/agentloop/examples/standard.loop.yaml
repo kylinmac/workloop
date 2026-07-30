@@ -1,0 +1,145 @@
+schema_version: 1
+loop_id: al-20260730-002
+loop_kind: delivery
+parent_loop_id: null
+title: 增加退款幂等校验
+execution_profile:
+  level: standard
+  status: confirmed
+  reason: 单一交付单元但涉及业务规则
+state: ready_for_verification
+requirement_version: 1
+updated_at: "2026-07-30T14:00:00+08:00"
+owners:
+  coordination: loop-coordinator
+  requirement: product-owner
+  development: development-agent
+  verification: verification-agent
+classification:
+  primary_type: 新增能力
+  tags: [workflow-state]
+scope:
+  claim: active
+  claimed_at: "2026-07-30T11:00:00+08:00"
+  paths: [src/refund/**]
+  interfaces: [POST /refunds]
+  db_objects: [refunds]
+  states: [Refund.PENDING]
+gates:
+  requirement_confirmation:
+    gate_id: requirement_confirmation
+    status: approved
+    mode: manual
+    confidence: high
+    event_id: gate-101
+    subject_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    inheritance: null
+  routing_confirmation:
+    gate_id: routing_confirmation
+    status: not_required
+    mode: manual_on_low_confidence
+    event_id: null
+    subject_digest: null
+  completion:
+    gate_id: completion
+    status: pending
+    mode: human_acceptance
+    event_id: null
+    subject_digest: null
+  destructive_action:
+    gate_id: destructive_action
+    status: not_required
+    mode: always_manual
+    event_id: null
+    subject_digest: null
+    operation_digest: null
+gate_events:
+  - event_id: gate-101
+    gate_id: requirement_confirmation
+    decision: approved
+    actor: product-owner
+    source: host-ui
+    source_event_id: ui-101
+    requirement_version: 1
+    digest_algorithm: sha256-manifest-v1
+    subject_files:
+      - path: .agentloop/loops/al-20260730-002/requirement.md
+        sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    artifact_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    at: "2026-07-30T11:10:00+08:00"
+git:
+  root: .
+  target_branch: main
+  branch: agentloop/al-20260730-002
+  worktree: .worktrees/al-20260730-002
+  head_commit: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  working_tree_status: clean
+  baseline_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  last_checkpoint_commit: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  checkpoints: []
+  integration:
+    status: pending
+    base_commit: null
+    head_commit: null
+    merges: []
+    post_merge_checks: []
+    delivery_commit: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+routing:
+  status: decided
+  confidence: high
+  decided_at: "2026-07-30T11:20:00+08:00"
+  decided_by: development-agent
+  development:
+    main_flow: business-process
+    reason: 幂等和状态规则是主要不确定性
+    supporting_flows: [data-contract]
+    required_outputs: [state-model]
+  verification:
+    policy: targeted
+    reason: 已有定向测试覆盖修改和相邻行为
+    reused_flows: []
+    new_flows: []
+    executors:
+      refund-targeted: [code]
+files:
+  requirement: requirement.md
+  development: development.md
+  evidence: evidence.yaml
+execution:
+  execution_id: null
+  subflow_id: null
+  step_id: null
+  status: null
+  operation: null
+  inputs: []
+  expected_outputs: []
+  check: null
+  idempotency: null
+  attempt: 0
+  max_attempts: 3
+  last_error: null
+verification_control:
+  failure_roundtrips: 0
+  max_failure_roundtrips: 3
+subflows: []
+child_loops: []
+integration_verification:
+  required: false
+  reason: 单一交付单元
+  decided_by: loop-coordinator
+  decided_at: "2026-07-30T11:20:00+08:00"
+  dependencies: []
+  state: not_required
+  handoff: {}
+  failure_handoff: {}
+  reused_flows: []
+  new_flows: []
+  executors: {}
+  verification_failure_roundtrips: 0
+verification_handoff:
+  requirement_version: 1
+  code_commit: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+failure_handoff: null
+artifacts: []
+blocked: null
+transitions: []

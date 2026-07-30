@@ -1,0 +1,42 @@
+schema_version: 1
+flow_id: dashboard-prototype-fidelity
+title: 仪表盘原型保真验证
+executor: ui
+status: active
+covers:
+  paths: [src/dashboard/**]
+  interfaces: [GET /api/dashboard]
+  routes: [/dashboard]
+  db_objects: []
+  states: []
+  tags: [prototype, visual]
+preconditions:
+  - 已准备 dashboard:view 账号
+steps:
+  - step_id: dashboard-baseline
+    action: 在 1440x900 视口打开仪表盘并点击查看详情
+    expect: DOM 结构、截图和跳转满足原型及允许差异
+    screenshot: dashboard-baseline
+checks: [visual, interaction, state]
+automation:
+  path: tests/ui/dashboard-prototype.spec.ts
+prototype:
+  type: high_fidelity
+  references:
+    - prototype_path: design/01-dashboard.html
+      route: /dashboard
+visual_validation:
+  viewport: {width: 1440, height: 900}
+  comparison: both
+  allowed_differences: [运行时时间文本]
+  pass_criteria: DOM 区域和控件全部存在，排除允许差异后的截图像素差不超过 1%
+coverage:
+  - prototype_path: design/01-dashboard.html
+    route: /dashboard
+    region_id: summary
+    interaction_id: open-detail
+    acceptance_id: AC-UI-01
+    automation_steps: [dashboard-baseline]
+source_requirements:
+  - loop_id: al-20260730-007
+    requirement_version: 1

@@ -1,0 +1,204 @@
+schema_version: 1
+loop_id: al-20260730-003
+loop_kind: delivery
+parent_loop_id: null
+title: 完整退款链路
+execution_profile:
+  level: composite
+  status: confirmed
+  reason: 退款创建和支付回退可独立开发验证
+state: orchestrating
+requirement_version: 1
+updated_at: "2026-07-30T15:00:00+08:00"
+owners:
+  coordination: loop-coordinator
+  requirement: product-owner
+  development: development-agent
+  verification: verification-agent
+classification:
+  primary_type: 新增能力
+  tags: [workflow-state, data-change]
+scope:
+  claim: active
+  claimed_at: "2026-07-30T12:00:00+08:00"
+  paths: [src/refund/**, src/payment/**]
+  interfaces: [POST /refunds]
+  db_objects: [refunds, payments]
+  states: [Refund.PENDING, Payment.REVERSED]
+gates:
+  requirement_confirmation:
+    gate_id: requirement_confirmation
+    status: approved
+    mode: manual
+    confidence: high
+    event_id: gate-201
+    subject_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    inheritance: null
+  routing_confirmation:
+    gate_id: routing_confirmation
+    status: not_required
+    mode: manual_on_low_confidence
+    event_id: null
+    subject_digest: null
+  completion:
+    gate_id: completion
+    status: pending
+    mode: human_acceptance
+    event_id: null
+    subject_digest: null
+  destructive_action:
+    gate_id: destructive_action
+    status: not_required
+    mode: always_manual
+    event_id: null
+    subject_digest: null
+    operation_digest: null
+gate_events:
+  - event_id: gate-201
+    gate_id: requirement_confirmation
+    decision: approved
+    actor: product-owner
+    source: host-ui
+    source_event_id: ui-201
+    requirement_version: 1
+    digest_algorithm: sha256-manifest-v1
+    subject_files:
+      - path: .agentloop/loops/al-20260730-003/requirement.md
+        sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    artifact_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    at: "2026-07-30T12:10:00+08:00"
+git:
+  root: .
+  target_branch: main
+  branch: agentloop/al-20260730-003-integration
+  worktree: .worktrees/al-20260730-003-integration
+  head_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  working_tree_status: clean
+  baseline_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  last_checkpoint_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  checkpoints: []
+  integration:
+    status: pending
+    base_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    head_commit: null
+    merges: []
+    post_merge_checks: []
+    delivery_commit: null
+routing:
+  status: decided
+  confidence: high
+  decided_at: "2026-07-30T12:20:00+08:00"
+  decided_by: development-agent
+  development:
+    main_flow: business-process
+    reason: 跨退款与支付状态链路是总体不确定性
+    supporting_flows: [data-contract]
+    required_outputs: [state-model, openapi]
+  verification:
+    policy: flow
+    reason: 涉及跨模块状态和数据一致性
+    reused_flows: [refund-application]
+    new_flows: [refund-end-to-end]
+    executors:
+      refund-end-to-end: [code]
+files:
+  requirement: requirement.md
+  development: development.md
+  evidence: evidence.yaml
+execution:
+  execution_id: null
+  subflow_id: null
+  step_id: null
+  status: null
+  operation: null
+  inputs: []
+  expected_outputs: []
+  check: null
+  idempotency: null
+  attempt: 0
+  max_attempts: 3
+  last_error: null
+verification_control: null
+subflows:
+  - subflow_id: sf-01-refund
+    title: 创建退款
+    required: true
+    acceptance_ids: [AC-01]
+    deliverable: 可创建且不会重复的退款申请
+    requirement_version: 1
+    state: developing
+    state_reason: null
+    skip_reason: null
+    main_flow: business-process
+    dependencies: []
+    scope:
+      claim: active
+      claimed_at: "2026-07-30T12:30:00+08:00"
+      paths: [src/refund/**]
+      interfaces: [POST /refunds]
+      db_objects: [refunds]
+      states: [Refund.PENDING]
+    git:
+      branch: agentloop/al-20260730-003-sf-01
+      worktree: .worktrees/al-20260730-003-sf-01
+    verification:
+      policy: flow
+      reason: 新增退款业务路径
+      reused_flows: [refund-application]
+      new_flows: []
+      executors:
+        refund-application: [code]
+    verification_handoff: null
+    failure_handoff: null
+    verification_failure_roundtrips: 0
+  - subflow_id: sf-02-payment
+    title: 支付回退
+    required: true
+    acceptance_ids: [AC-02]
+    deliverable: 退款通过后支付状态完成回退
+    requirement_version: 1
+    state: pending
+    state_reason: 等待退款切片
+    skip_reason: null
+    main_flow: business-process
+    dependencies: [sf-01-refund]
+    scope:
+      claim: active
+      claimed_at: "2026-07-30T12:30:00+08:00"
+      paths: [src/payment/**]
+      interfaces: []
+      db_objects: [payments]
+      states: [Payment.REVERSED]
+    git:
+      branch: agentloop/al-20260730-003-sf-02
+      worktree: .worktrees/al-20260730-003-sf-02
+    verification:
+      policy: targeted
+      reason: 已有支付状态测试可定向复用
+      reused_flows: []
+      new_flows: []
+      executors:
+        payment-reversal: [code]
+    verification_handoff: null
+    failure_handoff: null
+    verification_failure_roundtrips: 0
+child_loops: []
+integration_verification:
+  required: true
+  reason: 两个切片共同决定订单最终状态
+  decided_by: loop-coordinator
+  decided_at: "2026-07-30T12:20:00+08:00"
+  dependencies: [sf-01-refund, sf-02-payment]
+  state: pending
+  handoff: {}
+  failure_handoff: {}
+  reused_flows: []
+  new_flows: [refund-end-to-end]
+  executors:
+    refund-end-to-end: [code]
+  verification_failure_roundtrips: 0
+verification_handoff: null
+failure_handoff: null
+artifacts: []
+blocked: null
+transitions: []
