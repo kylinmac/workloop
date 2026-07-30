@@ -9,10 +9,12 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +55,15 @@ TRANSITIONS = {
     "orchestrating": {"verified", "clarifying", "blocked", "cancelled"},
     "verified": {"done", "clarifying", "blocked", "cancelled"},
     "blocked": set(),
+}
+SUBFLOW_TRANSITIONS = {
+    "pending": {"development_preparing", "skipped", "blocked"},
+    "development_preparing": {"developing", "blocked"},
+    "developing": {"ready_for_verification", "failed", "blocked"},
+    "ready_for_verification": {"verifying", "developing", "blocked"},
+    "verifying": {"passed", "failed", "developing", "blocked"},
+    "failed": {"developing", "blocked"},
+    "blocked": {"development_preparing", "developing", "verifying"},
 }
 AUTOMATION_SUFFIXES = {
     ".bash", ".cjs", ".go", ".java", ".js", ".jsx", ".kt", ".mjs",
@@ -106,6 +117,76 @@ def atomic_yaml(path: Path, data: dict) -> None:
         handle.write(text)
         temp_path = Path(handle.name)
     os.replace(temp_path, path)
+
+
+def controlled_payload(root: Path, loop: dict) -> dict:
+    evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    return {
+        "state": loop["state"],
+        "gates": {
+            key: {
+                "status": value["status"],
+                "event_id": value.get("event_id"),
+                "subject_digest": value.get("subject_digest"),
+            }
+            for key, value in loop["gates"].items()
+        },
+        "subflows": {
+            item["subflow_id"]: item["state"] for item in loop.get("subflows", [])
+        },
+        "evidence_validity": {
+            item["evidence_id"]: item["validity"] for item in evidence.get("runs", [])
+        },
+    }
+
+
+def control_snapshot_path(root: Path, loop_id: str) -> Path:
+    return root / ".agentloop" / "control" / f"{loop_id}.json"
+
+
+def write_control_snapshot(root: Path, loop: dict) -> None:
+    payload = controlled_payload(root, loop)
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    path = control_snapshot_path(root, loop["loop_id"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "algorithm": "sha256-control-v1",
+        "digest": hashlib.sha256(encoded).hexdigest(),
+        "payload": payload,
+    }, ensure_ascii=False, indent=2) + "\n")
+
+
+def verify_control_snapshot(root: Path, loop_path_value: Path, loop: dict) -> None:
+    path = control_snapshot_path(root, loop["loop_id"])
+    if not path.is_file():
+        write_control_snapshot(root, loop)
+        return
+    snapshot = json.loads(path.read_text())
+    expected = snapshot["payload"]
+    encoded = json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()
+    if snapshot.get("digest") != hashlib.sha256(encoded).hexdigest():
+        raise ValueError(f"control snapshot is corrupt: {path}")
+    actual = controlled_payload(root, loop)
+    if actual == expected:
+        return
+    loop["state"] = expected["state"]
+    for key, value in expected["gates"].items():
+        loop["gates"][key].update(value)
+    states = expected["subflows"]
+    for subflow in loop.get("subflows", []):
+        if subflow["subflow_id"] in states:
+            subflow["state"] = states[subflow["subflow_id"]]
+    atomic_yaml(loop_path_value, loop)
+    evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    if evidence_path.is_file():
+        evidence = load_yaml(evidence_path)
+        validities = expected["evidence_validity"]
+        for run in evidence.get("runs", []):
+            if run["evidence_id"] in validities:
+                run["validity"] = validities[run["evidence_id"]]
+        atomic_yaml(evidence_path, evidence)
+    raise ValueError("unauthorized state/Gate/subflow/evidence modification detected and restored")
 
 
 def schema_validator(name: str) -> Draft202012Validator:
@@ -360,6 +441,164 @@ def load_prototype_matrix(root: Path, loop: dict) -> tuple[dict | None, list[str
     return matrix, errors
 
 
+def openapi_operation_ids(root: Path, values: list[str]) -> tuple[set[str], list[str]]:
+    operations = set()
+    errors = []
+    for value in values:
+        path = project_file(root, value)
+        if path is None or not path.is_file():
+            errors.append(f"API contract does not exist: {value}")
+            continue
+        try:
+            document = load_yaml(path)
+        except Exception as error:
+            errors.append(f"API contract cannot be parsed: {value}: {error}")
+            continue
+        if not (document.get("openapi") or document.get("swagger")):
+            errors.append(f"API contract is not OpenAPI: {value}")
+            continue
+        for methods in document.get("paths", {}).values():
+            if not isinstance(methods, dict):
+                continue
+            for operation in methods.values():
+                if isinstance(operation, dict) and operation.get("operationId"):
+                    operations.add(operation["operationId"])
+    return operations, errors
+
+
+def prototype_business_preparation_errors(
+    root: Path,
+    loop: dict,
+    subflow: dict | None = None,
+) -> list[str]:
+    if not prototype_is_required(loop, subflow):
+        return []
+    matrix, errors = load_prototype_matrix(root, loop)
+    if matrix is None:
+        return errors
+    subflow_id = subflow["subflow_id"] if subflow else None
+    pages = [
+        page for page in matrix["pages"]
+        if subflow_id is None or page.get("subflow_id") == subflow_id
+    ]
+    interactions = [
+        interaction for page in pages for interaction in page["interactions"]
+    ]
+    server_interactions = [
+        item for item in interactions if item["effect"] != "client_only_exempt"
+    ]
+    files = loop.get("files", {})
+    slices_value = files.get("user_flow_slices")
+    if not slices_value:
+        errors.append("files.user_flow_slices is required for product-prototype")
+    else:
+        slices_path = loop_dir(root, loop["loop_id"]) / slices_value
+        if not slices_path.is_file():
+            errors.append(f"user flow slices are missing: {slices_path}")
+        else:
+            try:
+                slices = load_yaml(slices_path)
+                journeys = slices.get("journeys", [])
+                required_steps = {
+                    "create", "edit", "save", "refresh", "relogin", "query", "downstream", "audit"
+                }
+                if not any(required_steps.issubset(set(item.get("steps", []))) for item in journeys):
+                    errors.append("user flow slices have no complete production journey")
+                mapped = {
+                    interaction_id
+                    for item in journeys
+                    for interaction_id in item.get("interaction_ids", [])
+                }
+                missing = {
+                    item["interaction_id"] for item in server_interactions
+                } - mapped
+                if missing:
+                    errors.append(f"user flow slices do not map server interactions: {sorted(missing)}")
+            except Exception as error:
+                errors.append(f"user flow slices cannot be parsed: {error}")
+    if server_interactions:
+        values = files.get("api_contract", [])
+        if not values:
+            errors.append("files.api_contract is required for server-backed prototype interactions")
+        operations, contract_errors = openapi_operation_ids(root, values)
+        errors.extend(contract_errors)
+        for item in server_interactions:
+            for field in ("operation_id", "readback_operation_id"):
+                value = item.get(field)
+                if value and value not in operations:
+                    errors.append(
+                        f"prototype interaction {item['interaction_id']}: OpenAPI operation does not exist: {value}"
+                    )
+            if item["effect"] == "server_mutation" and not item.get("readback_operation_id"):
+                errors.append(
+                    f"prototype interaction {item['interaction_id']}: mutation has no readback operation"
+                )
+    return errors
+
+
+def prototype_business_verification_errors(
+    root: Path,
+    loop: dict,
+    subflow: dict | None = None,
+) -> list[str]:
+    if not prototype_is_required(loop, subflow):
+        return []
+    matrix, errors = load_prototype_matrix(root, loop)
+    if matrix is None:
+        return errors
+    subflow_id = subflow["subflow_id"] if subflow else None
+    expected = {
+        interaction["interaction_id"]
+        for page in matrix["pages"]
+        if subflow_id is None or page.get("subflow_id") == subflow_id
+        for interaction in page["interactions"]
+        if interaction["effect"] != "client_only_exempt"
+    }
+    if not expected:
+        return errors
+    evidence_file = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_file) if evidence_file.is_file() else {"runs": []}
+    tested_commit = loop.get("git", {}).get("integration", {}).get("delivery_commit") or loop.get("git", {}).get("head_commit")
+    covered = set()
+    complete_journey = False
+    for run in evidence.get("runs", []):
+        if (
+            run.get("subflow_id") != subflow_id
+            or run.get("executor") != "ui"
+            or run.get("requirement_version") != loop["requirement_version"]
+            or run.get("validity") != "active"
+            or run.get("result") != "passed"
+        ):
+            continue
+        report = run.get("test_report")
+        business = run.get("business_function")
+        if not report or not business:
+            errors.append(f"evidence {run.get('evidence_id')}: trusted business test report is missing")
+            continue
+        if report["code_commit"] != run["code_commit"] or (tested_commit and run["code_commit"] != tested_commit):
+            errors.append(f"evidence {run.get('evidence_id')}: test report is not bound to the tested commit")
+            continue
+        errors.extend(evidence_path_errors(root, [report["path"]], f"evidence {run.get('evidence_id')} test report"))
+        for item in business["interactions"]:
+            errors.extend(evidence_path_errors(
+                root, item["evidence_paths"], f"evidence {run.get('evidence_id')} business interaction"
+            ))
+            covered.add(item["interaction_id"])
+        for journey in business["journeys"]:
+            errors.extend(evidence_path_errors(
+                root, journey["evidence_paths"], f"evidence {run.get('evidence_id')} production journey"
+            ))
+            complete_journey = complete_journey or set(journey["steps"]) == {
+                "create", "edit", "save", "refresh", "relogin", "query", "downstream", "audit"
+            }
+    missing = expected - covered
+    if missing:
+        errors.append(f"business interaction evidence is incomplete: {sorted(missing)}")
+    if not complete_journey:
+        errors.append("no complete create/edit/save/refresh/relogin/query/downstream/audit journey evidence")
+    return errors
+
+
 def matrix_keys(matrix: dict, subflow_id: str | None = None) -> set[tuple[str, ...]]:
     result = set()
     for page in matrix.get("pages", []):
@@ -534,16 +773,20 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
     for loop in loops:
         if loop.get("state") in prepared_states:
             errors.extend(prototype_preparation_errors(root, loop))
+            errors.extend(prototype_business_preparation_errors(root, loop))
         if loop.get("state") in {"verified", "done"}:
             errors.extend(prototype_verification_errors(root, loop, flows))
+            errors.extend(prototype_business_verification_errors(root, loop))
             errors.extend(integration_data_verification_errors(root, loop, flows))
         for subflow in loop.get("subflows", []):
             if subflow.get("state") in {
                 "developing", "ready_for_verification", "verifying", "passed"
             }:
                 errors.extend(prototype_preparation_errors(root, loop, subflow))
+                errors.extend(prototype_business_preparation_errors(root, loop, subflow))
             if subflow.get("state") == "passed":
                 errors.extend(prototype_verification_errors(root, loop, flows, subflow))
+                errors.extend(prototype_business_verification_errors(root, loop, subflow))
     return errors
 
 
@@ -566,13 +809,16 @@ def load_loop(root: Path, loop_id: str) -> tuple[Path, dict]:
     path = loop_path(root, loop_id)
     if not path.is_file():
         raise ValueError(f"Loop not found: {loop_id}")
-    return path, load_yaml(path)
+    loop = load_yaml(path)
+    verify_control_snapshot(root, path, loop)
+    return path, loop
 
 
 def active_loops(root: Path) -> list[tuple[Path, dict]]:
     result = []
     for path in sorted((root / ".agentloop" / "loops").glob("*/loop.yaml")):
         loop = load_yaml(path)
+        verify_control_snapshot(root, path, loop)
         if loop.get("state") not in TERMINAL_STATES:
             result.append((path, loop))
     return result
@@ -884,6 +1130,7 @@ def write_loop_files(root: Path, loop: dict) -> None:
         shutil.rmtree(directory)
         raise ValueError(f"generated Loop invalid at {first.json_path}: {first.message}")
     atomic_yaml(directory / "loop.yaml", loop)
+    write_control_snapshot(root, loop)
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -950,7 +1197,15 @@ def cmd_validate(args: argparse.Namespace) -> None:
     cases.extend((path, "evidence.schema.json") for path in (control / "loops").glob("*/evidence.yaml"))
     errors = [error for path, schema in cases for error in validate_file(path, schema)]
     if not errors:
-        loops = [load_yaml(path) for path in loop_paths]
+        loops = []
+        for path in loop_paths:
+            loop = load_yaml(path)
+            try:
+                verify_control_snapshot(root, path, loop)
+            except ValueError as error:
+                errors.append(str(error))
+                continue
+            loops.append(loop)
         flows = {flow["flow_id"]: flow for flow in map(load_yaml, flow_paths)}
         errors.extend(runtime_semantic_errors(root, loops, flows))
     if errors:
@@ -999,8 +1254,11 @@ def cmd_route(args: argparse.Namespace) -> None:
         )
         if args.main_flow == "product-prototype":
             loop["files"]["prototype_matrix"] = "prototype-implementation-matrix.yaml"
-            if "prototype-implementation-matrix" not in loop["routing"]["development"]["required_outputs"]:
-                loop["routing"]["development"]["required_outputs"].append("prototype-implementation-matrix")
+            loop["files"]["user_flow_slices"] = "user-flow-slices.yaml"
+            loop["files"]["api_contract"] = ["api/openapi.yaml"]
+            for output in ("prototype-implementation-matrix", "user-flow-slices", "api-contract"):
+                if output not in loop["routing"]["development"]["required_outputs"]:
+                    loop["routing"]["development"]["required_outputs"].append(output)
         loop["routing"]["verification"].update(
             {
                 "policy": args.verification,
@@ -1016,6 +1274,7 @@ def cmd_route(args: argparse.Namespace) -> None:
         if errors:
             raise ValueError(f"routing invalid at {errors[0].json_path}: {errors[0].message}")
         atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
 
 
 def manifest_digest(root: Path, subjects: list[str]) -> tuple[list[dict], str]:
@@ -1155,6 +1414,7 @@ def cmd_gate(args: argparse.Namespace) -> None:
         if errors:
             raise ValueError(f"Gate update invalid at {errors[0].json_path}: {errors[0].message}")
         atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
     print(event_id)
 
 
@@ -1203,6 +1463,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
                 errors.append(f"subflow not passed: {subflow['subflow_id']}")
             if subflow["state"] == "passed":
                 errors.extend(prototype_verification_errors(root, loop, flows, subflow))
+                errors.extend(prototype_business_verification_errors(root, loop, subflow))
     if loop["git"]["integration"]["status"] != "verified":
         errors.append("git.integration.status is not verified")
     integration = loop["integration_verification"]
@@ -1235,6 +1496,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("routing_confirmation Gate is pending")
     if target == "developing":
         errors.extend(prototype_preparation_errors(root, loop))
+        errors.extend(prototype_business_preparation_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
     if target == "orchestrating":
         if loop["execution_profile"]["level"] != "composite":
@@ -1264,6 +1526,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("no active passed evidence for the current requirement")
         if current == "verifying":
             errors.extend(prototype_verification_errors(root, loop, runtime_flows(root)))
+            errors.extend(prototype_business_verification_errors(root, loop))
             errors.extend(integration_data_verification_errors(root, loop, runtime_flows(root)))
         elif current == "orchestrating":
             errors.extend(aggregation_errors(root, loop))
@@ -1279,9 +1542,59 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     return errors
 
 
+def subflow_transition_errors(root: Path, loop: dict, subflow: dict, target: str) -> list[str]:
+    current = subflow["state"]
+    errors = [] if target in SUBFLOW_TRANSITIONS.get(current, set()) else [
+        f"illegal subflow transition: {current} -> {target}"
+    ]
+    if loop["state"] != "orchestrating":
+        errors.append("subflow transitions require parent state orchestrating")
+    if target == "developing":
+        errors.extend(prototype_preparation_errors(root, loop, subflow))
+        errors.extend(prototype_business_preparation_errors(root, loop, subflow))
+    if target == "passed":
+        errors.extend(prototype_verification_errors(root, loop, runtime_flows(root), subflow))
+        errors.extend(prototype_business_verification_errors(root, loop, subflow))
+    return errors
+
+
 def cmd_transition(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
+    if args.subflow_id:
+        subflow = next(
+            (item for item in loop.get("subflows", []) if item["subflow_id"] == args.subflow_id),
+            None,
+        )
+        if not subflow:
+            raise ValueError(f"unknown subflow: {args.subflow_id}")
+        errors = subflow_transition_errors(root, loop, subflow, args.to)
+        if errors:
+            raise ValueError("; ".join(errors))
+        with loop_lock(root, args.loop_id, args.actor):
+            previous = subflow["state"]
+            subflow["state"] = args.to
+            subflow["state_reason"] = args.reason
+            loop["updated_at"] = now()
+            loop["transitions"].append({
+                "from": previous,
+                "to": args.to,
+                "subflow_id": args.subflow_id,
+                "actor": args.actor,
+                "at": now(),
+                "requirement_version": loop["requirement_version"],
+                "git_commit": args.git_commit or run_git(root, "rev-parse", "HEAD"),
+                "evidence": args.evidence or [],
+                "reason": args.reason,
+            })
+            schema_errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+            if schema_errors:
+                raise ValueError(
+                    f"subflow transition invalid at {schema_errors[0].json_path}: {schema_errors[0].message}"
+                )
+            atomic_yaml(path, loop)
+            write_control_snapshot(root, loop)
+        return
     if args.to == "blocked":
         if not args.resume_state or not args.unblock_condition:
             raise ValueError("blocked transition requires --resume-state and --unblock-condition")
@@ -1322,6 +1635,7 @@ def cmd_transition(args: argparse.Namespace) -> None:
         if errors:
             raise ValueError(f"transition invalid at {errors[0].json_path}: {errors[0].message}")
         atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
 
 
 def cmd_evidence(args: argparse.Namespace) -> None:
@@ -1330,15 +1644,68 @@ def cmd_evidence(args: argparse.Namespace) -> None:
     command = json.loads(args.command_json)
     if not isinstance(command, list) or not command or not all(isinstance(item, str) for item in command):
         raise ValueError("--command-json must be a non-empty JSON string array")
-    coverage = json.loads(args.coverage_json) if args.coverage_json else []
-    visual = json.loads(args.visual_json) if args.visual_json else None
-    data_lineage = json.loads(args.data_lineage_json) if args.data_lineage_json else None
-    if not isinstance(coverage, list):
-        raise ValueError("--coverage-json must be a JSON array")
-    if visual is not None and not isinstance(visual, dict):
-        raise ValueError("--visual-json must be a JSON object")
-    if data_lineage is not None and not isinstance(data_lineage, dict):
-        raise ValueError("--data-lineage-json must be a JSON object")
+    if args.coverage_json or args.visual_json or args.data_lineage_json:
+        raise ValueError("coverage/visual/data_lineage must be generated by the executed test report")
+    if loop["state"] not in {"verifying", "orchestrating"}:
+        raise ValueError("evidence can only be recorded while verifying or orchestrating")
+    code_commit = run_git(root, "rev-parse", "HEAD")
+    if args.code_commit and args.code_commit != code_commit:
+        raise ValueError("--code-commit does not match current HEAD")
+    report_path = project_file(root, args.report_path) if args.report_path else None
+    if args.executor == "ui" and report_path is None:
+        raise ValueError("UI evidence requires --report-path generated by the test runner")
+    if report_path:
+        report_path.unlink(missing_ok=True)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment["AGENTLOOP_CODE_COMMIT"] = code_commit
+    run_nonce = secrets.token_hex(16)
+    environment["AGENTLOOP_RUN_NONCE"] = run_nonce
+    if report_path:
+        environment["AGENTLOOP_REPORT_PATH"] = str(report_path)
+    started = now()
+    start_clock = time.monotonic()
+    result = subprocess.run(command, cwd=root, text=True, capture_output=True, env=environment)
+    duration_ms = int((time.monotonic() - start_clock) * 1000)
+    ended = now()
+    report = None
+    if report_path and report_path.is_file():
+        try:
+            report = json.loads(report_path.read_text())
+        except (json.JSONDecodeError, OSError) as error:
+            raise ValueError(f"test report is not valid JSON: {error}") from error
+        if report.get("code_commit") != code_commit:
+            raise ValueError("test report code_commit does not match current HEAD")
+        if report.get("run_nonce") != run_nonce:
+            raise ValueError("test report was not generated by the current execution")
+        if report.get("assertions", 0) < 1:
+            raise ValueError("test report has no assertions")
+        if report.get("skipped_required", 0) != 0:
+            raise ValueError("test report skipped required interactions")
+        flow = runtime_flows(root).get(args.flow_id) if args.flow_id else None
+        required_steps = {
+            item["step_id"] for item in (flow or {}).get("steps", []) if item.get("step_id")
+        }
+        executed_steps = set(report.get("executed_steps", []))
+        assertions_by_step = report.get("assertions_by_step", {})
+        if required_steps - executed_steps:
+            raise ValueError(f"test report did not execute required steps: {sorted(required_steps - executed_steps)}")
+        if any(assertions_by_step.get(step, 0) < 1 for step in required_steps):
+            raise ValueError("one or more required automation steps have no assertions")
+    if result.returncode == 0 and args.executor == "ui" and report is None:
+        raise ValueError("passed UI command did not generate a test report")
+    if args.stdout_path:
+        stdout_file = project_file(root, args.stdout_path)
+        if stdout_file is None:
+            raise ValueError("--stdout-path escapes project root")
+        stdout_file.parent.mkdir(parents=True, exist_ok=True)
+        stdout_file.write_text(result.stdout)
+    if args.stderr_path:
+        stderr_file = project_file(root, args.stderr_path)
+        if stderr_file is None:
+            raise ValueError("--stderr-path escapes project root")
+        stderr_file.parent.mkdir(parents=True, exist_ok=True)
+        stderr_file.write_text(result.stderr)
     path = loop_dir(root, args.loop_id) / "evidence.yaml"
     evidence = load_yaml(path) if path.exists() else {
         "schema_version": 1,
@@ -1346,8 +1713,7 @@ def cmd_evidence(args: argparse.Namespace) -> None:
         "runs": [],
     }
     index = len(evidence["runs"]) + 1
-    start = args.started_at or now()
-    end = args.ended_at or now()
+    outcome = "passed" if result.returncode == 0 else "failed"
     run = {
         "evidence_id": f"{args.loop_id}-evidence-{index:02d}",
         "flow_id": args.flow_id,
@@ -1356,33 +1722,43 @@ def cmd_evidence(args: argparse.Namespace) -> None:
         "requirement_version": loop["requirement_version"],
         "executor": args.executor,
         "command": command,
-        "result": args.result,
-        "exit_code": args.exit_code,
+        "result": outcome,
+        "exit_code": result.returncode,
         "counts": {
-            "passed": 1 if args.result == "passed" else 0,
-            "failed": 1 if args.result == "failed" else 0,
-            "skipped": 0,
+            "passed": 1 if outcome == "passed" else 0,
+            "failed": 1 if outcome == "failed" else 0,
+            "skipped": report.get("skipped_required", 0) if report else 0,
         },
         "validity": "active",
-        "code_commit": args.code_commit or run_git(root, "rev-parse", "HEAD"),
+        "code_commit": code_commit,
         "environment": args.environment,
-        "started_at": start,
-        "ended_at": end,
-        "duration_ms": args.duration_ms,
+        "started_at": started,
+        "ended_at": ended,
+        "duration_ms": duration_ms,
         "stdout_path": args.stdout_path,
         "stderr_path": args.stderr_path,
-        "coverage": coverage,
+        "coverage": report.get("coverage", []) if report else [],
         "artifacts": [],
     }
-    if visual is not None:
-        run["visual"] = visual
-    if data_lineage is not None:
-        run["data_lineage"] = data_lineage
+    if report:
+        run["test_report"] = {
+            "path": args.report_path,
+            "format": "agentloop-json",
+            "code_commit": code_commit,
+            "run_nonce": run_nonce,
+            "assertions": report["assertions"],
+            "executed_steps": report["executed_steps"],
+            "skipped_required": report["skipped_required"],
+        }
+        for key in ("visual", "data_lineage", "business_function"):
+            if report.get(key) is not None:
+                run[key] = report[key]
     evidence["runs"].append(run)
     errors = list(schema_validator("evidence.schema.json").iter_errors(evidence))
     if errors:
         raise ValueError(f"evidence invalid at {errors[0].json_path}: {errors[0].message}")
     atomic_yaml(path, evidence)
+    write_control_snapshot(root, loop)
     print(run["evidence_id"])
 
 
@@ -1571,9 +1947,9 @@ def parser() -> argparse.ArgumentParser:
     identity.add_argument("--check-id")
     evidence.add_argument("--subflow-id")
     evidence.add_argument("--executor", choices=["code", "ui", "command"], required=True)
-    evidence.add_argument("--result", choices=["passed", "failed", "blocked"], required=True)
+    evidence.add_argument("--result", choices=["passed", "failed", "blocked"])
     evidence.add_argument("--command-json", required=True)
-    evidence.add_argument("--exit-code", type=int, required=True)
+    evidence.add_argument("--exit-code", type=int)
     evidence.add_argument("--duration-ms", type=int, default=0)
     evidence.add_argument("--environment", default="local")
     evidence.add_argument("--code-commit")
@@ -1581,6 +1957,7 @@ def parser() -> argparse.ArgumentParser:
     evidence.add_argument("--ended-at")
     evidence.add_argument("--stdout-path")
     evidence.add_argument("--stderr-path")
+    evidence.add_argument("--report-path")
     evidence.add_argument("--coverage-json")
     evidence.add_argument("--visual-json")
     evidence.add_argument("--data-lineage-json")

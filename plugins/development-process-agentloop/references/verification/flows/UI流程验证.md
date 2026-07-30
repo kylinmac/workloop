@@ -98,6 +98,14 @@ coverage:
 
 运行证据使用 `data_lineage` 保存数据库对象、后端接口、前端路由的覆盖和各层观察值。三层观察值不一致或未覆盖声明范围时，UI flow 不得通过。
 
+### 产品原型业务功能 Gate
+
+产品原型 UI 自动化必须由插件实际执行，并在 `AGENTLOOP_REPORT_PATH` 生成绑定 `AGENTLOOP_CODE_COMMIT` 的报告。调用方不得提交任意 coverage、visual、data lineage 或预写 passed JSON；插件在运行前删除旧报告，并从本次测试报告生成 evidence。
+
+每个服务端 interaction 必须有真实浏览器操作及大于零的断言，覆盖 operation/响应、数据库或 Repository 持久化、readback、刷新、重登、失败、无权限、下游消费和审计。必需交互不得 skipped。Toast、关闭弹窗、页面跳转或 React 本地状态变化不能代替持久化证据。
+
+视觉保真和业务功能是两个独立 Gate：截图/DOM 通过不能补偿业务失败；业务通过也不能跳过高保真视觉要求。
+
 ### 运行证据
 
 - 测试框架报告

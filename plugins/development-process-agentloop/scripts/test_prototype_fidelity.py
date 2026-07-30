@@ -39,7 +39,20 @@ def page(index: int) -> dict:
             "interaction_id": "open-detail",
             "region_id": "main",
             "control_id": "open",
+            "effect": "client_only_exempt",
+            "precondition_database_state": "不适用；纯导航",
             "action": "点击详情",
+            "operation_id": None,
+            "expected_response": "不适用；纯导航",
+            "persistence_assertion": "不产生业务写入",
+            "readback_operation_id": None,
+            "refresh_assertion": "刷新后路由保持",
+            "relogin_assertion": "重新登录后按权限可访问",
+            "error_assertion": "加载失败显示错误状态",
+            "permission_assertion": "无权限显示 403",
+            "downstream_assertion": "不适用；纯导航",
+            "audit_assertion": "不适用；纯导航",
+            "reuse_or_exemption": "原型保真回归只验证客户端导航",
             "state_change": "显示详情",
             "acceptance_ids": [f"AC-UI-0{index}"],
         }],
@@ -50,6 +63,12 @@ def page(index: int) -> dict:
             "unauthorized": "显示无权限状态",
         },
         "data_sources": [f"GET /api/page-{index}"],
+        "business_data": [{
+            "display_id": "page-content",
+            "source_type": "api_field",
+            "source": f"GET /api/page-{index} response.content",
+            "empty_behavior": "暂无数据",
+        }],
         "permissions": ["page:view"],
         "responsive": ["小屏单列"],
         "allowed_deviations": [],
@@ -108,6 +127,8 @@ def main() -> None:
         loop["routing"]["verification"]["policy"] = "flow"
         loop["routing"]["verification"]["new_flows"] = ["prototype-ui"]
         loop["files"]["prototype_matrix"] = "prototype-implementation-matrix.yaml"
+        loop["files"]["user_flow_slices"] = "user-flow-slices.yaml"
+        loop["files"]["api_contract"] = ["api/openapi.yaml"]
         loop["prototype"] = {
             "implementation_basis": True,
             "type": "high_fidelity",
@@ -128,6 +149,14 @@ def main() -> None:
             } for item in pages],
         }
         loop_path.write_text(yaml.safe_dump(loop, allow_unicode=True, sort_keys=False))
+        (loop_dir / "user-flow-slices.yaml").write_text(yaml.safe_dump({
+            "journeys": [{
+                "journey_id": "production-smoke",
+                "steps": ["create", "edit", "save", "refresh", "relogin", "query", "downstream", "audit"],
+                "interaction_ids": [],
+            }],
+        }, allow_unicode=True, sort_keys=False))
+        AGENTLOOP.write_control_snapshot(root, loop)
         (loop_dir / "prototype-implementation-matrix.yaml").write_text(yaml.safe_dump({
             "schema_version": 1,
             "loop_id": loop_id,
@@ -192,6 +221,7 @@ def main() -> None:
                 "artifacts": [],
             }],
         }, allow_unicode=True, sort_keys=False))
+        AGENTLOOP.write_control_snapshot(root, loop)
 
         assert call(root, "validate").returncode != 0
         rejected = call(
@@ -226,6 +256,7 @@ def main() -> None:
         evidence = yaml.safe_load((loop_dir / "evidence.yaml").read_text())
         evidence["runs"][0]["subflow_id"] = subflow["subflow_id"]
         (loop_dir / "evidence.yaml").write_text(yaml.safe_dump(evidence, allow_unicode=True, sort_keys=False))
+        AGENTLOOP.write_control_snapshot(root, composite)
         rejected = call(
             root, "transition", loop_id, "verified",
             "--actor", "loop-coordinator", "--reason", "父级不应只信任 passed",
@@ -241,6 +272,7 @@ def main() -> None:
         )
         evidence["runs"][0]["subflow_id"] = None
         (loop_dir / "evidence.yaml").write_text(yaml.safe_dump(evidence, allow_unicode=True, sort_keys=False))
+        AGENTLOOP.write_control_snapshot(root, loop)
 
         automation = root / "tests" / "ui" / "prototype.py"
         automation.parent.mkdir(parents=True)

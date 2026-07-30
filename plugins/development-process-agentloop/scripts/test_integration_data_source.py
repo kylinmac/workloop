@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import importlib.util
 import subprocess
 import tempfile
 from pathlib import Path
@@ -8,6 +9,10 @@ import yaml
 
 
 ENGINE = Path(__file__).with_name("agentloop.py")
+SPEC = importlib.util.spec_from_file_location("agentloop_engine", ENGINE)
+AGENTLOOP = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader
+SPEC.loader.exec_module(AGENTLOOP)
 
 
 def call(root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -52,6 +57,7 @@ def main() -> None:
             "verification_flow_id": "orders-data-lineage",
         }
         write_yaml(loop_path, loop)
+        AGENTLOOP.write_control_snapshot(root, loop)
 
         automation = root / "tests" / "orders_data_lineage.py"
         automation.parent.mkdir(parents=True)
@@ -103,10 +109,12 @@ def main() -> None:
             "artifacts": [],
         }
         write_yaml(evidence_path, {"schema_version": 1, "loop_id": loop_id, "runs": [run]})
+        AGENTLOOP.write_control_snapshot(root, loop)
         assert call(root, "validate").returncode != 0
 
         loop["state"] = "verifying"
         write_yaml(loop_path, loop)
+        AGENTLOOP.write_control_snapshot(root, loop)
         rejected = call(root, "transition", loop_id, "verified", "--actor", "test", "--reason", "缺少链路证据")
         assert rejected.returncode != 0
 
@@ -134,10 +142,12 @@ def main() -> None:
             },
         }
         write_yaml(evidence_path, {"schema_version": 1, "loop_id": loop_id, "runs": [run]})
+        AGENTLOOP.write_control_snapshot(root, loop)
         assert call(root, "transition", loop_id, "verified", "--actor", "test", "--reason", "sentinel 不一致").returncode != 0
 
         run["data_lineage"]["backend"]["observed_sentinel"] = "agentloop-7f3a"
         write_yaml(evidence_path, {"schema_version": 1, "loop_id": loop_id, "runs": [run]})
+        AGENTLOOP.write_control_snapshot(root, loop)
         passed = call(root, "transition", loop_id, "verified", "--actor", "test", "--reason", "真实数据链路完整")
         assert passed.returncode == 0, passed.stderr
         assert call(root, "validate").returncode == 0

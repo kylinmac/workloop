@@ -17,7 +17,7 @@
         "additionalProperties": false,
         "required": [
           "prototype_path", "route", "regions", "interactions", "states",
-          "data_sources", "permissions", "responsive", "allowed_deviations"
+          "data_sources", "business_data", "permissions", "responsive", "allowed_deviations"
         ],
         "properties": {
           "prototype_path": {"type": "string", "minLength": 1},
@@ -55,15 +55,54 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["interaction_id", "region_id", "control_id", "action", "state_change", "acceptance_ids"],
-              "properties": {
-                "interaction_id": {"type": "string", "minLength": 1},
-                "region_id": {"type": "string", "minLength": 1},
-                "control_id": {"type": "string", "minLength": 1},
-                "action": {"type": "string", "minLength": 1},
-                "state_change": {"type": "string", "minLength": 1},
-                "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+            "required": [
+              "interaction_id", "region_id", "control_id", "effect", "precondition_database_state",
+              "action", "operation_id", "expected_response", "persistence_assertion",
+              "readback_operation_id", "refresh_assertion", "relogin_assertion",
+              "error_assertion", "permission_assertion", "downstream_assertion",
+              "audit_assertion", "reuse_or_exemption", "state_change", "acceptance_ids"
+            ],
+            "properties": {
+              "interaction_id": {"type": "string", "minLength": 1},
+              "region_id": {"type": "string", "minLength": 1},
+              "control_id": {"type": "string", "minLength": 1},
+              "effect": {"enum": ["server_mutation", "server_read", "client_only_exempt"]},
+              "precondition_database_state": {"type": "string", "minLength": 1},
+              "action": {"type": "string", "minLength": 1},
+              "operation_id": {"type": ["string", "null"], "minLength": 1},
+              "expected_response": {"type": "string", "minLength": 1},
+              "persistence_assertion": {"type": "string", "minLength": 1},
+              "readback_operation_id": {"type": ["string", "null"], "minLength": 1},
+              "refresh_assertion": {"type": "string", "minLength": 1},
+              "relogin_assertion": {"type": "string", "minLength": 1},
+              "error_assertion": {"type": "string", "minLength": 1},
+              "permission_assertion": {"type": "string", "minLength": 1},
+              "downstream_assertion": {"type": "string", "minLength": 1},
+              "audit_assertion": {"type": "string", "minLength": 1},
+              "reuse_or_exemption": {"type": ["string", "null"], "minLength": 1},
+              "state_change": {"type": "string", "minLength": 1},
+              "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+            },
+            "allOf": [
+              {
+                "if": {"properties": {"effect": {"enum": ["server_mutation", "server_read"]}}},
+                "then": {"properties": {"operation_id": {"type": "string"}, "reuse_or_exemption": {"type": "null"}}}
+              },
+              {
+                "if": {"properties": {"effect": {"const": "server_mutation"}}},
+                "then": {"properties": {"readback_operation_id": {"type": "string"}}}
+              },
+              {
+                "if": {"properties": {"effect": {"const": "client_only_exempt"}}},
+                "then": {
+                  "properties": {
+                    "operation_id": {"type": "null"},
+                    "readback_operation_id": {"type": "null"},
+                    "reuse_or_exemption": {"type": "string"}
+                  }
+                }
               }
+            ]
             }
           },
           "states": {
@@ -78,6 +117,21 @@
             }
           },
           "data_sources": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "business_data": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["display_id", "source_type", "source", "empty_behavior"],
+              "properties": {
+                "display_id": {"type": "string", "minLength": 1},
+                "source_type": {"enum": ["seed", "database", "api_field", "server_calculation"]},
+                "source": {"type": "string", "minLength": 1},
+                "empty_behavior": {"enum": ["empty_state", "暂无数据"]}
+              }
+            }
+          },
           "permissions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
           "responsive": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
           "allowed_deviations": {

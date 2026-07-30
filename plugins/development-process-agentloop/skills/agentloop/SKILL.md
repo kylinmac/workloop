@@ -152,6 +152,14 @@ database and proves the same sentinel through database, API, and UI evidence.
 Missing coverage or a mismatched sentinel blocks `verified` and parent
 aggregation. Static UI copy, enums, and display configuration are excluded.
 
+`product-prototype` builds a production system, never a demo. Routing requires
+the implementation matrix, user-flow slices, and an OpenAPI contract. Every
+server interaction maps to real operationIds and declares persistence,
+readback, refresh, relogin, failure, permission, downstream, and audit checks.
+The control tool executes UI automation itself and derives evidence from a
+fresh commit-bound report; caller-supplied passed/coverage JSON is not evidence.
+Visual and business Gates are independent.
+
 ## Gates
 
 Never infer approval from silence. Ask in the current Codex conversation and
@@ -243,6 +251,10 @@ failure handoff, and failure-roundtrip count independent. On failure, rerun the
 failed path, its normal path, affected branches, and required invariant
 neighbors. Respect the configured retry and verification-roundtrip limits;
 persist `blocked` when exhausted.
+
+Advance subflows only with `transition --subflow-id`; parent orchestration does
+not grant coding permission. The control snapshot rejects and restores direct
+edits to main/subflow state, Gate state, or evidence validity.
 
 On resume, reconcile `loop.yaml`, Git, current execution, last transition,
 artifacts, and evidence. If work completed but state did not advance, verify

@@ -141,6 +141,12 @@ epic
 
 `self_check` 是明确例外：它不产生“测试 Agent 已通过”的结论。开发 Agent 记录直接验收结果后，协调者只依据已确认的 `self_check` 策略推进 `developing → verified`，不冒充测试角色。
 
+## 子流程受控状态转换
+
+Composite 父 Loop 进入 `orchestrating` 只表示协调开始，不授予任何子流程编码许可。子流程必须通过 `transition --subflow-id` 逐步推进；该命令实际修改对应子流程并执行其门禁。`development_preparing → developing` 对产品原型子流程强制检查实现矩阵、用户流程切片、OpenAPI 契约、服务端承载和验证方案；`verifying → passed` 强制检查视觉与业务功能证据。
+
+直接编辑 `loop.yaml.state`、`subflows[].state`、Gate 状态或 `evidence.validity` 属于非法旁路。控制程序比较受控字段快照，发现差异时恢复最后合法值并拒绝当前操作。
+
 ## Git 基线门禁
 
 第一次修改项目文件前必须满足：
