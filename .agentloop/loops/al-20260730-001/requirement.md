@@ -84,3 +84,14 @@ Composite 子流程只能由 `transition --subflow-id` 改变状态；进入 `de
 控制程序必须维护受控字段摘要，检测 `state`、子流程状态、Gate 状态和 evidence validity 的旁路修改。检测到篡改时拒绝推进并恢复最后合法控制状态。
 
 最终 `verified` 前必须至少有一条完整用户旅程证据：创建 → 编辑 → 保存 → 刷新 → 重新登录 → 查询 → 后续流程消费 → 审计可追溯。视觉 Gate 与业务功能 Gate 独立，任一正式 API 缺失、写操作未持久化或必需业务交互失败都必须阻止通过。
+
+## 需求版本 4：修复子流程 Evidence 提交绑定
+
+Composite 子流程验证时，业务 Evidence 的 tested commit 必须取该子流程最近一次合法进入 `verifying` 的 transition `git_commit`，不得使用父 Loop 旧的 `git.integration.delivery_commit/head_commit`。父流程或集成级验证仍使用精确的 integration delivery/head commit。
+
+验收标准：
+
+1. 子流程最近一次 `to: verifying` transition 为 `46804e8` 时，绑定同一 commit 的真实 UI report 可以通过，即使父级 integration commit 仍为旧值。
+2. Evidence 与子流程 verifying transition commit 不一致时仍必须失败。
+3. 多轮重验时取同一子流程最后一次进入 `verifying` 的 commit，不受其他子流程 transition 影响。
+4. 父级验证的提交选择保持原行为。

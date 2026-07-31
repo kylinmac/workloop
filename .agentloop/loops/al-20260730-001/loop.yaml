@@ -8,8 +8,8 @@ execution_profile:
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
 state: verified
-requirement_version: 3
-updated_at: '2026-07-31T01:00:09+08:00'
+requirement_version: 4
+updated_at: '2026-07-31T09:55:04+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -53,8 +53,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-003
-    subject_digest: 09e75c83ad7f39e56ad915e45bf350ca7e318bd9857a9b844b2a82c8bdfd9423
+    event_id: gate-004
+    subject_digest: 77a7873ea95f94a34ac09cbf7f223b227de73466c09c7ccb9558e06a575e1a0f
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -121,15 +121,31 @@ gate_events:
   reason: 用户确认同时修复产品原型业务完成门禁和控制检查漏洞
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-004
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-chat
+  source_event_id: user-subflow-tested-commit-fix-20260731
+  requirement_version: 4
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: a46256ba7b71da0c948ddeaba2fee8f1f4a606260307f573776bc2d02c448ec1
+  artifact_digest: 77a7873ea95f94a34ac09cbf7f223b227de73466c09c7ccb9558e06a575e1a0f
+  at: '2026-07-31T09:49:56+08:00'
+  reason: 用户明确给出错误场景和正确提交选择规则
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
   branch: main
   worktree: .
-  head_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+  head_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
   working_tree_status: dirty
-  baseline_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
-  last_checkpoint_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+  baseline_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+  last_checkpoint_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
   checkpoints:
   - requirement_version: 1
     commit: 9bd8823
@@ -140,32 +156,32 @@ git:
   - requirement_version: 3
     commit: a50d207bdf48341975c18469bdf4e7611e440c59
     reason: 产品原型业务完成、可信 Evidence、子流程状态与防篡改门禁
+  - requirement_version: 4
+    commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+    reason: 子流程 Evidence 绑定最近一次进入 verifying 的提交
   integration:
     status: verified
-    base_commit: 261db71bec1faa61c4587fdf4f6226bb8eb5d7d9
-    head_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+    base_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+    head_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
     merges: []
-    post_merge_checks: []
-    delivery_commit: a50d207bdf48341975c18469bdf4e7611e440c59
+    post_merge_checks:
+    - check: full-plugin-regression
+      result: passed
+    delivery_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T00:48:53+08:00'
+  decided_at: '2026-07-31T09:49:56+08:00'
   decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 文档约束未在统一控制入口执行，需修复 Schema、transition 和 evidence runner
-    supporting_flows:
-    - data-contract
-    - business-process
+    reason: 统一提交选择逻辑错误地混用子流程和父级 integration commit
+    supporting_flows: []
     required_outputs:
-    - 原型业务功能与 OpenAPI 门禁
-    - 可信 Evidence runner
-    - Composite 子流程状态机
-    - 受控字段防篡改摘要
+    - scope-aware tested commit selector
   verification:
     policy: targeted
-    reason: 失败样例和完整用户旅程通过样例覆盖全部门禁
+    reason: 子流程最新 verifying、错误 commit、多轮重验和父级回归
     reused_flows: []
     new_flows: []
     executors: {}
@@ -205,46 +221,13 @@ integration_verification:
   executors: {}
   verification_failure_roundtrips: 0
 verification_handoff:
-  requirement_version: 3
-  code_commit: a50d207bdf48341975c18469bdf4e7611e440c59
-  implemented_flows:
-  - production-prototype-business-gate
-  - trusted-evidence-runner
-  - controlled-subflow-transition
+  requirement_version: 4
+  code_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
   changed_files:
-  - agentloop/schemas/prototype-matrix.schema.json
-  - agentloop/schemas/evidence.schema.json
-  - agentloop/schemas/loop.schema.json
   - plugins/development-process-agentloop/scripts/agentloop.py
   - plugins/development-process-agentloop/scripts/test_production_prototype_gate.py
-  changed_interfaces:
-  - prototype interaction to OpenAPI operation
-  - evidence command executes automation and derives report
-  - transition --subflow-id
-  - .agentloop/control snapshot
-  changed_data: []
-  changed_states:
-  - development_preparing
-  - developing
-  - verifying
-  - orchestrating
-  - verified
-  affected_existing_flows:
-  - product-prototype
-  - UI verification
-  - composite orchestration
-  invariant_behaviors:
-  - 非产品原型流程保持原验证策略
-  suggested_checks:
-  - python3 plugins/development-process-agentloop/scripts/test_agentloop.py
-  test_accounts: []
-  test_data:
-  - 生产预算完整用户旅程 fixture
-  environment_requirements:
-  - Python 3
-  - Git
-  feature_flags: []
-  known_limitations: []
+  - agentloop/产物与目录协议.md
+  check: python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
 artifacts: []
 blocked: null
@@ -482,3 +465,77 @@ transitions:
   evidence:
   - al-20260730-001-evidence-03
   reason: 契约缺失、持久化旅程、可信报告、子流程推进和篡改恢复回归全部通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T09:48:41+08:00'
+  requirement_version: 3
+  git_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+  evidence: []
+  reason: 修复子流程 Evidence 提交绑定选择错误
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T09:49:55+08:00'
+  requirement_version: 4
+  git_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+  evidence: []
+  reason: 子流程与父级提交绑定规则已形成可执行验收标准
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T09:49:56+08:00'
+  requirement_version: 4
+  git_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+  evidence: []
+  reason: 需求版本 4 已确认
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T09:49:56+08:00'
+  requirement_version: 4
+  git_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+  evidence: []
+  reason: 开始修复 scope-aware 提交绑定
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T09:50:36+08:00'
+  requirement_version: 4
+  git_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
+  evidence: []
+  reason: 提交选择规则和定向回归方案已完成
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T09:54:43+08:00'
+  requirement_version: 4
+  git_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  evidence:
+  - commit:2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  reason: scope-aware 提交选择、回归测试和插件安装完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T09:54:44+08:00'
+  requirement_version: 4
+  git_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  evidence: []
+  reason: 接收子流程提交绑定根因修复
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T09:55:04+08:00'
+  requirement_version: 4
+  git_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  evidence:
+  - al-20260730-001-evidence-04
+  reason: 子流程最近 verifying 提交、父级 integration 提交及完整插件回归均通过
