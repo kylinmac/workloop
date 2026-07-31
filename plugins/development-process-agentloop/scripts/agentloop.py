@@ -559,13 +559,14 @@ def prototype_business_verification_errors(
     evidence_file = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
     evidence = load_yaml(evidence_file) if evidence_file.is_file() else {"runs": []}
     tested_commit = tested_commit_for_scope(loop, subflow_id)
-    if subflow_id and not tested_commit:
-        errors.append(f"subflow {subflow_id}: no verifying transition commit")
+    if not tested_commit:
+        errors.append(f"{subflow_id or loop['loop_id']}: no tested commit")
+    scope_ids = evidence_scope_ids(loop, subflow_id)
     covered = set()
     complete_journey = False
     for run in evidence.get("runs", []):
         if (
-            run.get("subflow_id") != subflow_id
+            run.get("subflow_id") not in scope_ids
             or run.get("executor") != "ui"
             or run.get("requirement_version") != loop["requirement_version"]
             or run.get("validity") != "active"
@@ -612,7 +613,21 @@ def tested_commit_for_scope(loop: dict, subflow_id: str | None) -> str | None:
                 return transition["git_commit"]
         return None
     integration = loop.get("git", {}).get("integration", {})
-    return integration.get("delivery_commit") or loop.get("git", {}).get("head_commit")
+    return (
+        integration.get("delivery_commit")
+        or integration.get("head_commit")
+        or loop.get("git", {}).get("head_commit")
+    )
+
+
+def evidence_scope_ids(loop: dict, subflow_id: str | None) -> set[str | None]:
+    if subflow_id:
+        return {subflow_id}
+    if loop.get("loop_kind") == "delivery" and loop.get("execution_profile", {}).get("level") == "composite":
+        return {None} | {
+            item["subflow_id"] for item in loop.get("subflows", []) if item.get("state") == "passed"
+        }
+    return {None}
 
 
 def matrix_keys(matrix: dict, subflow_id: str | None = None) -> set[tuple[str, ...]]:
@@ -644,7 +659,12 @@ def coverage_key(item: dict) -> tuple[str, ...]:
 
 def selected_flow_ids(loop: dict, subflow: dict | None = None) -> set[str]:
     verification = subflow["verification"] if subflow else loop["routing"]["verification"]
-    return set(verification.get("reused_flows", [])) | set(verification.get("new_flows", []))
+    result = set(verification.get("reused_flows", [])) | set(verification.get("new_flows", []))
+    if subflow is None and loop.get("loop_kind") == "delivery" and loop.get("execution_profile", {}).get("level") == "composite":
+        for item in loop.get("subflows", []):
+            if item.get("state") == "passed":
+                result |= selected_flow_ids(loop, item)
+    return result
 
 
 def evidence_path_errors(root: Path, paths: list[str], label: str) -> list[str]:
@@ -705,15 +725,20 @@ def prototype_verification_errors(
 
     evidence_file = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
     evidence = load_yaml(evidence_file) if evidence_file.is_file() else {"runs": []}
+    tested_commit = tested_commit_for_scope(loop, subflow_id)
+    scope_ids = evidence_scope_ids(loop, subflow_id)
     covered = set()
     for run in evidence.get("runs", []):
         if (
             run.get("flow_id") not in evidence_ids
-            or run.get("subflow_id") != subflow_id
+            or run.get("subflow_id") not in scope_ids
             or run.get("requirement_version") != loop["requirement_version"]
             or run.get("validity") != "active"
             or run.get("result") != "passed"
         ):
+            continue
+        if tested_commit and run.get("code_commit") != tested_commit:
+            errors.append(f"evidence {run.get('evidence_id')}: visual report is not bound to the tested commit")
             continue
         visual = run.get("visual")
         if not visual or visual.get("result") != "passed":
@@ -1654,6 +1679,92 @@ def cmd_transition(args: argparse.Namespace) -> None:
         write_control_snapshot(root, loop)
 
 
+def cmd_integration_checkpoint(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    if loop.get("execution_profile", {}).get("level") != "composite" and loop.get("loop_kind") != "epic":
+        raise ValueError("integration checkpoint requires a composite or epic Loop")
+    if loop["state"] not in {"orchestrating", "blocked"}:
+        raise ValueError("integration checkpoint requires orchestrating or blocked state")
+    if loop["state"] == "blocked" and loop.get("blocked", {}).get("resume_state") != "orchestrating":
+        raise ValueError("blocked Loop must resume to orchestrating")
+    commit = run_git(root, "rev-parse", "HEAD")
+    if args.git_commit and args.git_commit != commit:
+        raise ValueError("--git-commit does not match current HEAD")
+    if not args.evidence:
+        raise ValueError("integration checkpoint requires passed evidence")
+    evidence_path = loop_dir(root, args.loop_id) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    runs = {run.get("evidence_id"): run for run in evidence.get("runs", [])}
+    selected = []
+    for evidence_id in args.evidence:
+        run = runs.get(evidence_id)
+        if not run:
+            raise ValueError(f"unknown evidence: {evidence_id}")
+        if (
+            run.get("requirement_version") != loop["requirement_version"]
+            or run.get("validity") != "active"
+            or run.get("result") != "passed"
+            or run.get("code_commit") != commit
+        ):
+            raise ValueError(f"evidence is not active/passed on the current requirement and commit: {evidence_id}")
+        selected.append(run)
+    integration = loop["git"]["integration"]
+    integration["head_commit"] = commit
+    integration["delivery_commit"] = commit
+    integration["status"] = "verified"
+    recorded_evidence = {item.get("evidence_id") for item in integration["post_merge_checks"]}
+    integration["post_merge_checks"].extend([
+        {
+            "evidence_id": run["evidence_id"],
+            "check": run.get("flow_id") or run.get("check_id"),
+            "result": "passed",
+        }
+        for run in selected if run["evidence_id"] not in recorded_evidence
+    ])
+    loop["git"]["head_commit"] = commit
+    loop["git"]["last_checkpoint_commit"] = commit
+    checkpoint = {
+        "scope": "integration",
+        "requirement_version": loop["requirement_version"],
+        "commit": commit,
+        "evidence": args.evidence,
+        "reason": args.reason,
+    }
+    if checkpoint not in loop["git"]["checkpoints"]:
+        loop["git"]["checkpoints"].append(checkpoint)
+    integration_verification = loop["integration_verification"]
+    if integration_verification["required"]:
+        integration_verification["state"] = "passed"
+        integration_verification["handoff"] = {
+            "requirement_version": loop["requirement_version"],
+            "code_commit": commit,
+            "evidence": args.evidence,
+            "checks": [
+                run.get("flow_id") or run.get("check_id")
+                for run in selected
+                if run.get("flow_id") or run.get("check_id")
+            ],
+        }
+    errors = aggregation_errors(root, loop)
+    if prototype_is_required(loop):
+        flows = runtime_flows(root)
+        errors.extend(prototype_verification_errors(root, loop, flows))
+        errors.extend(prototype_business_verification_errors(root, loop))
+    if errors:
+        raise ValueError("; ".join(errors))
+    loop["updated_at"] = now()
+    schema_errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if schema_errors:
+        raise ValueError(
+            f"integration checkpoint invalid at {schema_errors[0].json_path}: {schema_errors[0].message}"
+        )
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+    print(commit)
+
+
 def cmd_evidence(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     _, loop = load_loop(root, args.loop_id)
@@ -1955,6 +2066,14 @@ def parser() -> argparse.ArgumentParser:
     transition.add_argument("--resume-state")
     transition.add_argument("--unblock-condition")
     transition.set_defaults(func=cmd_transition)
+
+    checkpoint = commands.add_parser("integration-checkpoint")
+    checkpoint.add_argument("loop_id")
+    checkpoint.add_argument("--actor", required=True)
+    checkpoint.add_argument("--reason", required=True)
+    checkpoint.add_argument("--evidence", action="append", required=True)
+    checkpoint.add_argument("--git-commit")
+    checkpoint.set_defaults(func=cmd_integration_checkpoint)
 
     evidence = commands.add_parser("evidence")
     evidence.add_argument("loop_id")

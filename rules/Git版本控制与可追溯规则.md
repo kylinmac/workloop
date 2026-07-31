@@ -145,6 +145,17 @@ agentloop(<loop_id>/<subflow_id>@r<requirement_version>): <本次开发切片完
 
 `integration_verification.handoff.code_commit` 必须等于测试开始时的 `git.integration.head_commit`。测试期间该分支有新提交时，原集成证据立即失效并重新执行。
 
+集成分支产生新的已测试提交后，协调者必须使用控制命令记录 checkpoint，不得直接编辑状态文件：
+
+```bash
+agentloop integration-checkpoint <loop-id> \
+  --actor loop-coordinator \
+  --reason "<本次集成检查>" \
+  --evidence <当前提交上的 evidence-id>
+```
+
+命令只接受当前 Git HEAD、当前需求版本且 `active/passed` 的 Evidence，并原子更新 `git.integration.head_commit`、`delivery_commit`、`last_checkpoint_commit`、集成检查结果和 `integration_verification.handoff`。旧提交、旧需求版本、stale、failed 或未知 Evidence 必须拒绝。
+
 同仓库 epic 不要求子 Loop 先合并到项目 `target_branch`。父 Loop 直接把每个子 Loop 的已验证交付提交作为 `source_commit` 合并到父集成分支，因此子 Loop 可以继续使用默认的 `verified_integration_branch`。跨仓库 epic 不执行 Git 合并，只锁定各仓库交付提交。
 
 ```text

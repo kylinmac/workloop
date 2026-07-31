@@ -183,7 +183,10 @@ def main() -> None:
                 "routes": ["/budget"], "db_objects": ["budgets"], "states": [], "tags": [],
             },
             "preconditions": ["隔离数据库"],
-            "steps": [{"step_id": "budget-save", "action": "执行完整预算旅程", "expect": "持久化且可审计"}],
+            "steps": [{
+                "step_id": "budget-save", "action": "执行完整预算旅程",
+                "expect": "持久化且可审计", "screenshot": "artifacts/impl.png",
+            }],
             "checks": ["visual", "interaction", "business_function"],
             "automation": {"path": "tests/budget_ui.py"},
             "prototype": {"type": "high_fidelity", "references": [
@@ -243,14 +246,98 @@ def main() -> None:
         assert yaml.safe_load(composite_path.read_text())["subflows"][0]["state"] == "development_preparing"
         parent = yaml.safe_load(composite_path.read_text())
         parent["git"]["integration"]["delivery_commit"] = "c4e33a5"
+        def verifying_transition(owner: str, commit: str) -> dict:
+            return {
+                "from": "ready_for_verification", "to": "verifying", "subflow_id": owner,
+                "actor": "verify", "at": "2026-01-01T00:00:00+00:00",
+                "requirement_version": 1, "git_commit": commit, "evidence": [], "reason": "test",
+            }
         parent["transitions"].extend([
-            {"subflow_id": subflow_id, "to": "verifying", "git_commit": "old-subflow"},
-            {"subflow_id": "sf-other", "to": "verifying", "git_commit": "other-subflow"},
-            {"subflow_id": subflow_id, "to": "verifying", "git_commit": "46804e8"},
+            verifying_transition(subflow_id, "old-subflow"),
+            verifying_transition("sf-other", "other-subflow"),
+            verifying_transition(subflow_id, "46804e8"),
         ])
         assert AGENTLOOP.tested_commit_for_scope(parent, subflow_id) == "46804e8"
         assert AGENTLOOP.tested_commit_for_scope(parent, "sf-missing") is None
         assert AGENTLOOP.tested_commit_for_scope(parent, None) == "c4e33a5"
+
+        parent["state"] = "blocked"
+        parent["blocked"] = {
+            "reason": "旧集成提交",
+            "owner": "coordinator",
+            "unblock_condition": "记录当前集成 checkpoint",
+            "resume_state": "orchestrating",
+        }
+        parent["prototype"] = loop["prototype"]
+        parent["files"].update({
+            "prototype_matrix": "prototype-implementation-matrix.yaml",
+            "user_flow_slices": "user-flow-slices.yaml",
+            "api_contract": ["api/openapi.yaml"],
+        })
+        parent["subflows"][0]["state"] = "passed"
+        parent["subflows"][0]["main_flow"] = "product-prototype"
+        parent["subflows"][0]["prototype_pages"] = [{
+            "prototype_path": "design/budget.html", "route": "/budget",
+        }]
+        parent["subflows"][0]["verification"]["new_flows"] = ["budget-production"]
+        parent["integration_verification"]["required"] = True
+        parent["integration_verification"]["state"] = "failed"
+        parent["transitions"][-1]["git_commit"] = head
+        matrix = yaml.safe_load((loop_dir / "prototype-implementation-matrix.yaml").read_text())
+        matrix["loop_id"] = composite_id
+        matrix["pages"][0]["subflow_id"] = subflow_id
+        write_yaml(composite_path.parent / "prototype-implementation-matrix.yaml", matrix)
+        write_yaml(
+            composite_path.parent / "user-flow-slices.yaml",
+            yaml.safe_load((loop_dir / "user-flow-slices.yaml").read_text()),
+        )
+        run = yaml.safe_load((loop_dir / "evidence.yaml").read_text())["runs"][-1]
+        run.update({
+            "evidence_id": f"{composite_id}-evidence-01",
+            "subflow_id": subflow_id,
+            "code_commit": head,
+        })
+        run["test_report"]["code_commit"] = head
+        invalid_run = dict(run)
+        invalid_run["evidence_id"] = f"{composite_id}-evidence-stale"
+        invalid_run["code_commit"] = "stale-commit"
+        write_yaml(composite_path.parent / "evidence.yaml", {
+            "schema_version": 1, "loop_id": composite_id, "runs": [invalid_run],
+        })
+        write_yaml(composite_path, parent)
+        AGENTLOOP.write_control_snapshot(root, parent)
+        rejected_checkpoint = call(
+            root, "integration-checkpoint", composite_id,
+            "--actor", "coordinator", "--reason", "错误提交",
+            "--evidence", invalid_run["evidence_id"],
+        )
+        assert rejected_checkpoint.returncode != 0 and "current requirement and commit" in rejected_checkpoint.stderr
+        write_yaml(composite_path.parent / "evidence.yaml", {
+            "schema_version": 1, "loop_id": composite_id, "runs": [run],
+        })
+        AGENTLOOP.write_control_snapshot(root, parent)
+        checkpoint = call(
+            root, "integration-checkpoint", composite_id,
+            "--actor", "coordinator", "--reason", "当前集成回归通过",
+            "--evidence", run["evidence_id"], "--git-commit", head,
+        )
+        assert checkpoint.returncode == 0, checkpoint.stderr
+        checkpointed = yaml.safe_load(composite_path.read_text())
+        assert checkpointed["git"]["integration"]["head_commit"] == head
+        assert checkpointed["git"]["integration"]["delivery_commit"] == head
+        assert checkpointed["integration_verification"]["handoff"]["code_commit"] == head
+        resumed = call(
+            root, "transition", composite_id, "orchestrating",
+            "--actor", "coordinator", "--reason", "checkpoint 已完成",
+        )
+        assert resumed.returncode == 0, resumed.stderr
+        aggregated = call(
+            root, "transition", composite_id, "verified",
+            "--actor", "coordinator", "--reason", "聚合子流程 Evidence",
+        )
+        assert aggregated.returncode == 0, aggregated.stderr
+        validated = call(root, "validate")
+        assert validated.returncode == 0, validated.stderr
 
     print("passed: production prototype and control gates")
 

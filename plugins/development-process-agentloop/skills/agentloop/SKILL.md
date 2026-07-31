@@ -193,6 +193,10 @@ write, worktree creation, merge, rollback, or delivery.
 - Composite and same-repository epic work merge verified source commits into a
   parent integration branch. Rerun each delivery's targeted/flow checks on the
   integration head.
+- Record a tested integration head with `integration-checkpoint`, referencing
+  only current-requirement active passed Evidence on the current Git HEAD. The
+  command atomically updates the integration head/delivery checkpoint and
+  integration verification handoff; never edit those fields directly.
 - If integration verification is required, run it on that same exact
   integration commit. If not required, the merge and post-merge checks are
   still mandatory.
@@ -274,6 +278,8 @@ Before `verified -> done`:
 2. Confirm all required validation and evidence are current and passed.
 3. For composite/epic, confirm delivery-unit aggregation, verified integration
    commit, and integration verification.
+   Parent prototype Gates aggregate passed subflow Evidence only when it is
+   bound to the current requirement and exact integration commit.
 4. Confirm the completion Gate.
 5. Confirm the delivery commit is queryable and user changes are preserved.
 6. Transition to `done`; the control tool releases the scope claim.
