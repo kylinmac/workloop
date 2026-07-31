@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: verified
+state: blocked
 requirement_version: 1
-updated_at: '2026-07-31T18:36:07+08:00'
+updated_at: '2026-07-31T18:37:12+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -286,7 +286,11 @@ verification_handoff:
   check: /usr/bin/python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
 artifacts: []
-blocked: null
+blocked:
+  reason: 实现、安装与回归已完成，等待用户批准 completion Gate
+  owner: loop-coordinator
+  unblock_condition: 用户确认本次 Gate 认证兼容修复验收通过
+  resume_state: verified
 transitions:
 - from: null
   to: draft
@@ -457,3 +461,13 @@ transitions:
   evidence:
   - al-20260731-001-evidence-02
   reason: 最终 Gate 认证与旧历史兼容回归通过
+- from: verified
+  to: blocked
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T18:37:12+08:00'
+  requirement_version: 1
+  git_commit: 11765a043adc3eb6017b82797c18a608fe89d962
+  evidence:
+  - al-20260731-001-evidence-02
+  reason: 实现、安装与回归已完成，等待用户批准 completion Gate

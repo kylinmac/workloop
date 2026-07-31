@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "01faa4ba7e12132b3e0108e02be721a26d5052b0a83fcb1f0eaa164ddba568a4",
+  "digest": "128cd1b67f3521b2c2b08339c3b234010ebd60c6e5b2c30e92a68bc41b9fafed",
   "payload": {
-    "state": "verified",
+    "state": "blocked",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -256,31 +256,6 @@
           "executors": {}
         }
       }
-    },
-    "integration_control": {
-      "git_integration": {
-        "status": "pending",
-        "base_commit": "b5852ae4e62659678b87daf26c18ab98479d81c2",
-        "head_commit": null,
-        "merges": [],
-        "post_merge_checks": [],
-        "delivery_commit": null
-      },
-      "integration_verification": {
-        "required": false,
-        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
-        "decided_by": "loop-coordinator",
-        "decided_at": "2026-07-31T18:17:14+08:00",
-        "dependencies": [],
-        "state": "not_required",
-        "handoff": {},
-        "failure_handoff": {},
-        "reused_flows": [],
-        "new_flows": [],
-        "executors": {},
-        "verification_failure_roundtrips": 0
-      },
-      "child_loops": []
     }
   }
 }
