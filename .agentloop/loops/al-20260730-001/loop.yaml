@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: developing
+state: verified
 requirement_version: 7
-updated_at: '2026-07-31T17:22:34+08:00'
+updated_at: '2026-07-31T17:24:01+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -1498,6 +1498,36 @@ transitions:
   evidence:
   - .agentloop/loops/al-20260730-001/development.md
   reason: 进入测试运行时修正
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:23:34+08:00'
+  requirement_version: 7
+  git_commit: 423cba0e5a3b1525e2b74f874c3eb4146d89739f
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 安装后测试入口已统一加载插件内 YAML vendor
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:23:35+08:00'
+  requirement_version: 7
+  git_commit: 423cba0e5a3b1525e2b74f874c3eb4146d89739f
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 执行系统 Python 绑定回归
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:24:01+08:00'
+  requirement_version: 7
+  git_commit: 423cba0e5a3b1525e2b74f874c3eb4146d89739f
+  evidence:
+  - al-20260730-001-evidence-16
+  reason: 安装缓存与系统 Python 回归闭环通过
 acceptance_obligations:
 - acceptance_id: AC-CTRL-01
   criterion: 两个必需义务仅一个证据时 verified 失败，全部覆盖后通过
