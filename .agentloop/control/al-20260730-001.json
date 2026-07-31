@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v1",
-  "digest": "99e1a7c3c705fbe8598e7c6d2321b7b25e1bc8561b43f88ccf7008f3c8de3304",
+  "digest": "46776b36cb21620c5b595fdcc9ef3727b004690ff0f2d8b7b3aebd63f2e62bda",
   "payload": {
-    "state": "developing",
+    "state": "verified",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -34,7 +34,8 @@
       "al-20260730-001-evidence-05": "active",
       "al-20260730-001-evidence-06": "active",
       "al-20260730-001-evidence-07": "active",
-      "al-20260730-001-evidence-08": "active"
+      "al-20260730-001-evidence-08": "active",
+      "al-20260730-001-evidence-09": "active"
     }
   }
 }

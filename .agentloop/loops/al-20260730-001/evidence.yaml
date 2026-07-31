@@ -201,3 +201,28 @@ runs:
   stderr_path: .agentloop/loops/al-20260730-001/artifacts/full-plugin-regression-v6-legacy.stderr
   coverage: []
   artifacts: []
+- evidence_id: al-20260730-001-evidence-09
+  flow_id: null
+  check_id: full-plugin-regression-v6-unique-behavior-id
+  subflow_id: null
+  requirement_version: 6
+  executor: command
+  command:
+  - python3
+  - plugins/development-process-agentloop/scripts/test_agentloop.py
+  result: passed
+  exit_code: 0
+  counts:
+    passed: 1
+    failed: 0
+    skipped: 0
+  validity: active
+  code_commit: 8e151f5c68470a17b511200868085c0d9619cde4
+  environment: local
+  started_at: '2026-07-31T12:13:56+08:00'
+  ended_at: '2026-07-31T12:14:06+08:00'
+  duration_ms: 9569
+  stdout_path: .agentloop/loops/al-20260730-001/artifacts/full-plugin-regression-v6-unique.stdout
+  stderr_path: .agentloop/loops/al-20260730-001/artifacts/full-plugin-regression-v6-unique.stderr
+  coverage: []
+  artifacts: []
