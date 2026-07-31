@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256-control-v1",
-  "digest": "dd40c70e1a55606dc82883276aede71b51c5d9e6041e90b4525dfb3bcffa308f",
+  "digest": "eaeddab6751d4a328e6677648f4a61137e16844e8d67bfdf17e1c46bd8831e37",
   "payload": {
     "state": "verified",
     "gates": {
@@ -31,7 +31,8 @@
       "al-20260730-001-evidence-02": "stale",
       "al-20260730-001-evidence-03": "active",
       "al-20260730-001-evidence-04": "active",
-      "al-20260730-001-evidence-05": "active"
+      "al-20260730-001-evidence-05": "active",
+      "al-20260730-001-evidence-06": "active"
     }
   }
 }

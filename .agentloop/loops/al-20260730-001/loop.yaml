@@ -9,7 +9,7 @@ execution_profile:
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
 state: verified
 requirement_version: 5
-updated_at: '2026-07-31T10:36:42+08:00'
+updated_at: '2026-07-31T10:41:29+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -158,10 +158,10 @@ git:
   target_branch: main
   branch: main
   worktree: .
-  head_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+  head_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
   working_tree_status: dirty
   baseline_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
-  last_checkpoint_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+  last_checkpoint_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
   checkpoints:
   - requirement_version: 1
     commit: 9bd8823
@@ -176,17 +176,17 @@ git:
     commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
     reason: 子流程 Evidence 绑定最近一次进入 verifying 的提交
   - requirement_version: 5
-    commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+    commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
     reason: 集成 checkpoint 与复合父流程 Evidence 聚合
   integration:
     status: verified
     base_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
-    head_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+    head_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
     merges: []
     post_merge_checks:
     - check: full-plugin-regression
       result: passed
-    delivery_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+    delivery_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
 routing:
   status: decided
   confidence: high
@@ -242,7 +242,7 @@ integration_verification:
   verification_failure_roundtrips: 0
 verification_handoff:
   requirement_version: 5
-  code_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+  code_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
   changed_files:
   - plugins/development-process-agentloop/scripts/agentloop.py
   - plugins/development-process-agentloop/scripts/test_production_prototype_gate.py
@@ -635,3 +635,78 @@ transitions:
   evidence:
   - al-20260730-001-evidence-05
   reason: checkpoint 信任边界、父级跨提交聚合拒绝与合法聚合完整回归通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T10:38:33+08:00'
+  requirement_version: 5
+  git_commit: e5ab9fc
+  evidence: []
+  reason: workflow 集成回归发现父级错误地把非视觉 flow 纳入视觉 Gate
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T10:38:33+08:00'
+  requirement_version: 5
+  git_commit: e5ab9fc
+  evidence: []
+  reason: 该失败属于已确认需求版本 5 的父级聚合验收范围
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T10:38:33+08:00'
+  requirement_version: 5
+  git_commit: e5ab9fc
+  evidence: []
+  reason: 沿用已批准的需求版本 5
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T10:38:33+08:00'
+  requirement_version: 5
+  git_commit: e5ab9fc
+  evidence: []
+  reason: 准备混合视觉与非视觉 flow 聚合修复
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T10:38:34+08:00'
+  requirement_version: 5
+  git_commit: e5ab9fc
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 视觉 Gate 仅消费 visual flow 的修复点和回归已明确
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T10:41:06+08:00'
+  requirement_version: 5
+  git_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
+  evidence:
+  - commit:9d86713b0c55fe3ee152af178625db6f7cf6863c
+  reason: 混合 flow 视觉聚合修复、回归和安装完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T10:41:06+08:00'
+  requirement_version: 5
+  git_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
+  evidence: []
+  reason: 接收混合视觉与非视觉 flow 聚合修复
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T10:41:29+08:00'
+  requirement_version: 5
+  git_commit: 9d86713b0c55fe3ee152af178625db6f7cf6863c
+  evidence:
+  - al-20260730-001-evidence-06
+  reason: 父级视觉 Gate 忽略非视觉 flow，完整插件回归通过
