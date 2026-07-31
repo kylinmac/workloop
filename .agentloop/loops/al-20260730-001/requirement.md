@@ -95,3 +95,16 @@ Composite 子流程验证时，业务 Evidence 的 tested commit 必须取该子
 2. Evidence 与子流程 verifying transition commit 不一致时仍必须失败。
 3. 多轮重验时取同一子流程最后一次进入 `verifying` 的 commit，不受其他子流程 transition 影响。
 4. 父级验证的提交选择保持原行为。
+
+## 需求版本 5：集成 checkpoint 与父级 Evidence 聚合
+
+Composite/epic 必须能通过控制命令把当前 Git HEAD 原子记录为集成 head/delivery checkpoint；调用方不得直接编辑 `loop.yaml`。命令只接受当前需求版本、当前提交上真实执行且 active/passed 的 Evidence，并同步集成验证 handoff。
+
+复合父流程的原型视觉与业务完成门禁必须聚合已通过子流程的 Evidence，而不是要求重复生成 `subflow_id: null` 的父级 UI Evidence。聚合只接受当前需求版本、当前集成提交、active/passed 且属于已通过子流程的 Evidence。
+
+验收标准：
+
+1. 合法 checkpoint 将 `git.integration.head_commit`、`delivery_commit` 和验证 handoff 绑定当前 HEAD。
+2. 旧提交、旧需求版本、失败、stale 或未知 Evidence 必须被 checkpoint 拒绝。
+3. `sf-04-product-ui` 的当前提交 UI Evidence 能覆盖父级 48 条视觉/业务矩阵和完整生产旅程。
+4. 父级聚合不得跨需求版本、跨集成提交或聚合未通过子流程的 Evidence。

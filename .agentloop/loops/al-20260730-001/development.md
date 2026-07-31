@@ -98,3 +98,7 @@ git diff --check
 ## 需求版本 4：实现方案
 
 新增统一 `tested_commit_for_scope`：子流程从 transition 历史逆序取自身最近一次 `to: verifying` 的 `git_commit`；顶层验证继续取 integration delivery/head。回归覆盖旧父级 commit、其他子流程 transition、多轮重验和缺失 verifying transition。
+
+## 需求版本 5：实现方案
+
+增加 `integration-checkpoint` 控制命令：只使用当前 HEAD，并校验所引用 Evidence 均为当前需求版本、当前提交、active/passed；原子更新集成 head、delivery、checkpoint 与集成验证 handoff。父级原型验证复用同一 scope 过滤，聚合 passed 子流程在当前集成提交上的视觉覆盖和业务旅程，子流程自身验证规则保持不变。

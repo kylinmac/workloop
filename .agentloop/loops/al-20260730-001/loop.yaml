@@ -8,8 +8,8 @@ execution_profile:
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
 state: verified
-requirement_version: 4
-updated_at: '2026-07-31T09:55:04+08:00'
+requirement_version: 5
+updated_at: '2026-07-31T10:36:42+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -53,8 +53,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-004
-    subject_digest: 77a7873ea95f94a34ac09cbf7f223b227de73466c09c7ccb9558e06a575e1a0f
+    event_id: gate-005
+    subject_digest: dcb3b1c4fb014abecc505b0268f8ed41f476a24d9aba83c160f3f037baa9ecdb
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -137,15 +137,31 @@ gate_events:
   reason: 用户明确给出错误场景和正确提交选择规则
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-005
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-chat
+  source_event_id: user-integration-checkpoint-parent-aggregation-20260731
+  requirement_version: 5
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: 426a1de35e718fec70c038ae18f9f36a9a158d3fcd6b292bfb9e068d71fcd50f
+  artifact_digest: dcb3b1c4fb014abecc505b0268f8ed41f476a24d9aba83c160f3f037baa9ecdb
+  at: '2026-07-31T10:30:09+08:00'
+  reason: 用户提供真实 blocked 事故和两项修复要求
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
   branch: main
   worktree: .
-  head_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  head_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
   working_tree_status: dirty
   baseline_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
-  last_checkpoint_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  last_checkpoint_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
   checkpoints:
   - requirement_version: 1
     commit: 9bd8823
@@ -159,29 +175,33 @@ git:
   - requirement_version: 4
     commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
     reason: 子流程 Evidence 绑定最近一次进入 verifying 的提交
+  - requirement_version: 5
+    commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+    reason: 集成 checkpoint 与复合父流程 Evidence 聚合
   integration:
     status: verified
     base_commit: b74a61b5f0039c35ece34633557ed2a6bb83537e
-    head_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+    head_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
     merges: []
     post_merge_checks:
     - check: full-plugin-regression
       result: passed
-    delivery_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+    delivery_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T09:49:56+08:00'
+  decided_at: '2026-07-31T10:30:21+08:00'
   decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 统一提交选择逻辑错误地混用子流程和父级 integration commit
+    reason: 缺少集成元数据控制入口且父级 Evidence scope 过滤只接受 subflow_id null
     supporting_flows: []
     required_outputs:
-    - scope-aware tested commit selector
+    - integration-checkpoint
+    - composite-evidence-aggregation
   verification:
     policy: targeted
-    reason: 子流程最新 verifying、错误 commit、多轮重验和父级回归
+    reason: 覆盖 checkpoint 信任边界、父级聚合、跨版本和跨提交拒绝
     reused_flows: []
     new_flows: []
     executors: {}
@@ -221,12 +241,13 @@ integration_verification:
   executors: {}
   verification_failure_roundtrips: 0
 verification_handoff:
-  requirement_version: 4
-  code_commit: 2f22ea5870bac7a85e7fd3838a9e2c190f8094b7
+  requirement_version: 5
+  code_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
   changed_files:
   - plugins/development-process-agentloop/scripts/agentloop.py
   - plugins/development-process-agentloop/scripts/test_production_prototype_gate.py
   - agentloop/产物与目录协议.md
+  - rules/Git版本控制与可追溯规则.md
   check: python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
 artifacts: []
@@ -539,3 +560,78 @@ transitions:
   evidence:
   - al-20260730-001-evidence-04
   reason: 子流程最近 verifying 提交、父级 integration 提交及完整插件回归均通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T10:29:27+08:00'
+  requirement_version: 4
+  git_commit: a6dd9af
+  evidence: []
+  reason: 补充合法集成 checkpoint 与复合父流程 Evidence 聚合门禁
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T10:30:09+08:00'
+  requirement_version: 5
+  git_commit: a6dd9af
+  evidence: []
+  reason: 集成 checkpoint 与父级 Evidence 聚合验收标准已明确
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T10:30:09+08:00'
+  requirement_version: 5
+  git_commit: a6dd9af
+  evidence: []
+  reason: 需求版本 5 已确认
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T10:30:21+08:00'
+  requirement_version: 5
+  git_commit: a6dd9af
+  evidence: []
+  reason: 开始准备控制命令与聚合回归
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T10:30:21+08:00'
+  requirement_version: 5
+  git_commit: a6dd9af
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 命令信任边界、原子更新字段和父级聚合选择规则已设计
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T10:36:24+08:00'
+  requirement_version: 5
+  git_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+  evidence:
+  - commit:9ddd01d01c877a422882e725c457a0635986f4cd
+  reason: 集成 checkpoint、父级聚合、回归与安装完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T10:36:24+08:00'
+  requirement_version: 5
+  git_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+  evidence: []
+  reason: 接收集成控制与父级聚合修复
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T10:36:42+08:00'
+  requirement_version: 5
+  git_commit: 9ddd01d01c877a422882e725c457a0635986f4cd
+  evidence:
+  - al-20260730-001-evidence-05
+  reason: checkpoint 信任边界、父级跨提交聚合拒绝与合法聚合完整回归通过
