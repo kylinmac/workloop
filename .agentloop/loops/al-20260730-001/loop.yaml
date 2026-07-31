@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: developing
+state: verified
 requirement_version: 6
-updated_at: '2026-07-31T13:51:16+08:00'
+updated_at: '2026-07-31T13:52:50+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -1087,3 +1087,33 @@ transitions:
   evidence:
   - .agentloop/loops/al-20260730-001/development.md
   reason: 编码前控制闭环、兼容策略与五路径回归方案已完成，允许更新协议与插件发布资产检查
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T13:52:15+08:00'
+  requirement_version: 6
+  git_commit: 5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 设计原则与需求、开发、验证、状态、交接、恢复协议已完成并通过开发自检
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T13:52:22+08:00'
+  requirement_version: 6
+  git_commit: 5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 测试范围为插件完整回归、Schema 示例、发布资产和文档一致性
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T13:52:50+08:00'
+  requirement_version: 6
+  git_commit: 5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c
+  evidence:
+  - al-20260730-001-evidence-11
+  reason: 完整插件回归、引用同步、示例 Schema、doctor 与文档检查均通过
