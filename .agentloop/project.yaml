@@ -2,6 +2,7 @@ schema_version: 1
 project_id: development-process
 project_root: .
 approval:
+  manual_event_authentication: local_attestation
   requirement_confirmation:
     mode: manual
     minimum_confidence: high

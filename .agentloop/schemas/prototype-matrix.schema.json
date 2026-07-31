@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentloop.local/schemas/prototype-matrix.schema.json",
+  "title": "AgentLoop prototype implementation matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "loop_id", "requirement_version", "pages"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "loop_id": {"type": "string", "pattern": "^al-[0-9]{8}-[0-9]{3}$"},
+    "requirement_version": {"type": "integer", "minimum": 1},
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prototype_path", "route", "regions", "interactions", "states",
+          "data_sources", "business_data", "permissions", "responsive", "allowed_deviations"
+        ],
+        "properties": {
+          "prototype_path": {"type": "string", "minLength": 1},
+          "route": {"type": "string", "minLength": 1},
+          "subflow_id": {"type": ["string", "null"]},
+          "regions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["region_id", "layout", "required_controls"],
+              "properties": {
+                "region_id": {"type": "string", "minLength": 1},
+                "layout": {"type": "string", "minLength": 1},
+                "required_controls": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["control_id", "description"],
+                    "properties": {
+                      "control_id": {"type": "string", "minLength": 1},
+                      "description": {"type": "string", "minLength": 1}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "interactions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+            "required": [
+              "interaction_id", "region_id", "control_id", "effect", "precondition_database_state",
+              "action", "operation_id", "expected_response", "persistence_assertion",
+              "readback_operation_id", "refresh_assertion", "relogin_assertion",
+              "error_assertion", "permission_assertion", "downstream_assertion",
+              "audit_assertion", "reuse_or_exemption", "state_change", "acceptance_ids"
+            ],
+            "properties": {
+              "interaction_id": {"type": "string", "minLength": 1},
+              "region_id": {"type": "string", "minLength": 1},
+              "control_id": {"type": "string", "minLength": 1},
+              "effect": {"enum": ["server_mutation", "server_read", "client_only_exempt"]},
+              "precondition_database_state": {"type": "string", "minLength": 1},
+              "action": {"type": "string", "minLength": 1},
+              "operation_id": {"type": ["string", "null"], "minLength": 1},
+              "expected_response": {"type": "string", "minLength": 1},
+              "persistence_assertion": {"type": "string", "minLength": 1},
+              "readback_operation_id": {"type": ["string", "null"], "minLength": 1},
+              "refresh_assertion": {"type": "string", "minLength": 1},
+              "relogin_assertion": {"type": "string", "minLength": 1},
+              "error_assertion": {"type": "string", "minLength": 1},
+              "permission_assertion": {"type": "string", "minLength": 1},
+              "downstream_assertion": {"type": "string", "minLength": 1},
+              "audit_assertion": {"type": "string", "minLength": 1},
+              "reuse_or_exemption": {"type": ["string", "null"], "minLength": 1},
+              "state_change": {"type": "string", "minLength": 1},
+              "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+              "source_behavior_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "journey_required": {"type": "boolean"},
+              "navigation": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "required": ["source_route", "trigger", "direct_entry_allowed", "outcomes"],
+                "properties": {
+                  "source_route": {"type": "string", "minLength": 1},
+                  "trigger": {"enum": ["click", "submit"]},
+                  "direct_entry_allowed": {"type": "boolean"},
+                  "outcomes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["outcome_id", "source_behavior_id", "condition", "expected_target"],
+                      "properties": {
+                        "outcome_id": {"type": "string", "minLength": 1},
+                        "source_behavior_id": {"type": "string", "minLength": 1},
+                        "condition": {"type": "string", "minLength": 1},
+                        "expected_target": {"type": "string", "minLength": 1}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {"properties": {"effect": {"enum": ["server_mutation", "server_read"]}}},
+                "then": {"properties": {"operation_id": {"type": "string"}, "reuse_or_exemption": {"type": "null"}}}
+              },
+              {
+                "if": {"properties": {"effect": {"const": "server_mutation"}}},
+                "then": {"properties": {"readback_operation_id": {"type": "string"}}}
+              },
+              {
+                "if": {"properties": {"effect": {"const": "client_only_exempt"}}},
+                "then": {
+                  "properties": {
+                    "operation_id": {"type": "null"},
+                    "readback_operation_id": {"type": "null"},
+                    "reuse_or_exemption": {"type": "string"}
+                  }
+                }
+              }
+            ]
+            }
+          },
+          "states": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["loading", "empty", "error", "unauthorized"],
+            "properties": {
+              "loading": {"type": "string", "minLength": 1},
+              "empty": {"type": "string", "minLength": 1},
+              "error": {"type": "string", "minLength": 1},
+              "unauthorized": {"type": "string", "minLength": 1}
+            }
+          },
+          "data_sources": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "business_data": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["display_id", "source_type", "source", "empty_behavior"],
+              "properties": {
+                "display_id": {"type": "string", "minLength": 1},
+                "source_type": {"enum": ["seed", "database", "api_field", "server_calculation"]},
+                "source": {"type": "string", "minLength": 1},
+                "empty_behavior": {"enum": ["empty_state", "暂无数据"]}
+              }
+            }
+          },
+          "permissions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "responsive": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "allowed_deviations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["content", "reason"],
+              "properties": {
+                "content": {"type": "string", "minLength": 1},
+                "reason": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

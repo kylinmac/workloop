@@ -79,10 +79,10 @@ Read `references/agentloop/AgentLoop状态机.md` for transition semantics and
 | State | Required action |
 | --- | --- |
 | `draft` | Preserve the raw request, provisional execution profile, facts, and initial classification; transition to `clarifying`. |
-| `clarifying` | Confirm facts, goal, scope, non-goals, rules, executable acceptance criteria, classification, prototype decision, and final execution profile. |
+| `clarifying` | Confirm facts, goal, scope, non-goals, rules, executable acceptance criteria, classification obligations, prototype decision, and execution-profile qualifications. |
 | `awaiting_requirement_confirmation` | Stop for a manual Gate unless the project's explicit automatic policy and all qualification checks pass. |
 | `ready_for_development` | Inspect Git and existing implementation, route development and verification, and prepare standard or composite execution. |
-| `development_preparing` | Produce only the selected flow's required pre-code artifacts and pass its entry check. |
+| `development_preparing` | Produce the selected flow's assurance or stricter prototype artifacts and pass its entry check. |
 | `developing` | Implement, build, statically check, add necessary unit tests, and create a traceable development commit. |
 | `ready_for_verification` | Verify the handoff, commit, environment, data, accounts, and routed checks before accepting. |
 | `verifying` | Execute targeted or flow verification and record real evidence. |
@@ -142,6 +142,13 @@ confidence makes `routing_confirmation` pending; stop for its Gate. A trivial
 Loop is valid only with `quick-change`; any failed trivial condition upgrades
 the execution profile and invalidates `self_check`.
 
+New Loops use classification control v2. Before requirement confirmation,
+record the selected type's complete `classification.obligations`, each with a
+stable ID and independent source, plus `execution_profile.qualifications`.
+Before coding, non-trivial non-prototype work completes
+`development-assurance.yaml`; each route obligation maps back to classification
+obligations, real artifact paths, checks, required Gates, and recovery.
+
 Every new Loop explicitly records `prototype.implementation_basis`. When it is
 true, record prototype type, structure/visual/interaction/content fidelity,
 each prototype path and route, executable acceptance criteria, and justified
@@ -173,20 +180,29 @@ Visual and business Gates are independent.
 ## Gates
 
 Never infer approval from silence. Ask in the current Codex conversation and
-record the resulting user event before proceeding:
+import the resulting authenticated host event before proceeding. With the
+default `host_hmac` policy the host injects `AGENTLOOP_GATE_EVENT_SECRET` and
+provides the matching event signature; an Agent must never create or expose
+that secret:
 
 ```bash
 python3 <plugin-root>/scripts/agentloop.py gate <loop-id> <gate-id> \
   --decision approved \
   --actor "<actual approver>" \
   --source codex-chat \
-  --source-event-id "<current turn or host event id>" \
+  --source-event-id "<host event id>" \
+  --event-signature "<host signature>" \
   --subject <project-relative-file>
 ```
 
 The tool computes `sha256-manifest-v1`, stores the event, and binds the current
 Gate to it. Never invent a human actor or source event. Destructive actions and
 repository bootstrap are always manual.
+
+`local_attestation` records provenance but does not prove human identity. Do
+not describe it as a machine-enforced human Gate. Gate commands are valid only
+in the state that owns the Gate, and every consuming transition recomputes the
+approved subject digest.
 
 ## Git and concurrency
 
@@ -225,7 +241,8 @@ Read `references/verification/测试验证流程体系总览.md` and the routed 
   and acceptance result to `work.md`, then reference it in the transition.
 - `targeted`: run existing focused tests or commands and record evidence.
 - `flow`: reuse or create a stable flow definition, executable automation, and
-  real evidence.
+  a fresh report for every executor, with nonce, commit, assertions, executed
+  steps, and no skipped required steps.
 
 For `visual` checks or high-fidelity prototypes, flow automation must be a real
 project test/script, never a Markdown report. Record fixed viewport, comparison
@@ -287,6 +304,11 @@ On resume, reconcile `loop.yaml`, Git, current execution, last transition,
 artifacts, and evidence. If work completed but state did not advance, verify
 and repair metadata without rerunning. If state advanced but artifacts are
 missing, restore the last valid control state and record recovery.
+
+Run `runtime-upgrade` after installing a newer plugin into an existing project.
+If a control snapshot is missing, normal commands fail closed; use
+`repair-control <loop-id> --from-commit <trusted-commit>` and validate again.
+Never rebuild a missing snapshot from the current mutable Loop.
 
 When the completion Gate rejects prototype fidelity, use `--reason`, repeated
 `--affected-page`, and repeated `--revalidation-scope`. The command marks only

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
+import hashlib
+import hmac
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -17,10 +20,46 @@ HOOKS = ENGINE.parents[1] / "hooks" / "hooks.json"
 
 
 def run(root: Path, *args: str) -> str:
+    arguments = list(args)
+    environment = os.environ.copy()
+    environment["AGENTLOOP_GATE_EVENT_SECRET"] = "agentloop-test-secret"
+    if "gate" in arguments and "approved" in arguments:
+        def option(name: str) -> str:
+            return arguments[arguments.index(name) + 1]
+        loop = yaml.safe_load(
+            (root / ".agentloop" / "loops" / arguments[1] / "loop.yaml").read_text()
+        )
+        subjects = [
+            arguments[index + 1]
+            for index, value in enumerate(arguments)
+            if value == "--subject"
+        ]
+        if not subjects:
+            filename = loop["files"].get("requirement") or loop["files"].get("work")
+            subjects = [f".agentloop/loops/{arguments[1]}/{filename}"]
+        manifest = bytearray()
+        for subject in sorted(subjects):
+            digest = hashlib.sha256((root / subject).read_bytes()).hexdigest()
+            manifest.extend(subject.encode() + b"\0" + digest.encode() + b"\n")
+        artifact_digest = hashlib.sha256(manifest).hexdigest()
+        payload = "\0".join((
+            arguments[1], arguments[2], option("--decision"), option("--actor"),
+            option("--source"), option("--source-event-id"),
+            str(loop["requirement_version"]), artifact_digest,
+        )).encode()
+        arguments.extend([
+            "--event-signature",
+            hmac.new(
+                environment["AGENTLOOP_GATE_EVENT_SECRET"].encode(),
+                payload,
+                hashlib.sha256,
+            ).hexdigest(),
+        ])
     result = subprocess.run(
-        ["python3", str(ENGINE), "--root", str(root), *args],
+        ["python3", str(ENGINE), "--root", str(root), *arguments],
         text=True,
         capture_output=True,
+        env=environment,
     )
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
@@ -61,12 +100,46 @@ def main() -> None:
         git(root, "add", "README.md")
         git(root, "commit", "-qm", "baseline")
 
+        protected_patch = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "hook", "pre-tool"],
+            input=json.dumps({
+                "cwd": str(root),
+                "tool_input": {
+                    "command": (
+                        "*** Begin Patch\n"
+                        "*** Update File: .agentloop/loops/x/loop.yaml\n"
+                        "@@\n-state: draft\n+state: done\n"
+                        "*** End Patch\n"
+                    )
+                },
+            }),
+            text=True,
+            capture_output=True,
+        )
+        assert protected_patch.returncode == 0
+        assert '"permissionDecision": "deny"' in protected_patch.stdout
+
         loop_id = run(root, "init", "--title", "修正文案", "--level", "trivial")
         run(root, "validate")
         loop_path = root / ".agentloop" / "loops" / loop_id / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
         assert loop["state"] == "draft"
         assert (root / ".agentloop" / "schemas" / "loop.schema.json").exists()
+        snapshot_path = root / ".agentloop" / "control" / f"{loop_id}.json"
+        saved_loop = loop_path.read_text()
+        saved_snapshot = snapshot_path.read_text()
+        tampered = yaml.safe_load(saved_loop)
+        tampered["state"] = "done"
+        loop_path.write_text(yaml.safe_dump(tampered, allow_unicode=True, sort_keys=False))
+        snapshot_path.unlink()
+        result = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "validate"],
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode != 0 and "control snapshot is missing" in result.stderr
+        loop_path.write_text(saved_loop)
+        snapshot_path.write_text(saved_snapshot)
 
         run(
             root,
@@ -81,6 +154,29 @@ def main() -> None:
         loop = yaml.safe_load(loop_path.read_text())
         loop["execution_profile"]["status"] = "confirmed"
         loop["execution_profile"]["reason"] = "单一文案变更且可直接观察"
+        loop["execution_profile"]["qualifications"].update({
+            "single_delivery_unit": True,
+            "scope_known": True,
+            "low_risk": True,
+            "directly_observable": True,
+            "concurrent_work": False,
+        })
+        loop["classification"].update({
+            "primary_type": "内部改进",
+            "basis": "只调整测试仓库文案",
+            "obligations": [
+                {
+                    "obligation_id": f"IMP-{index}",
+                    "kind": kind,
+                    "requirement": kind,
+                    "source": "work.md",
+                    "status": "confirmed",
+                }
+                for index, kind in enumerate((
+                    "baseline", "metric", "target", "external-invariants", "allowed-scope"
+                ), 1)
+            ],
+        })
         loop_path.write_text(yaml.safe_dump(loop, allow_unicode=True, sort_keys=False))
         run(
             root,
@@ -92,6 +188,18 @@ def main() -> None:
             "--reason",
             "事实、范围和验收已核对",
         )
+        forged = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "gate", loop_id,
+                "requirement_confirmation", "--decision", "approved",
+                "--actor", "anyone", "--source", "invented",
+                "--source-event-id", "invented-event",
+            ],
+            text=True,
+            capture_output=True,
+            env={**os.environ, "AGENTLOOP_GATE_EVENT_SECRET": "agentloop-test-secret"},
+        )
+        assert forged.returncode != 0 and "signature is invalid" in forged.stderr
         run(
             root,
             "gate",
@@ -106,6 +214,20 @@ def main() -> None:
             "--source-event-id",
             "turn-001",
         )
+        work_path = root / ".agentloop" / "loops" / loop_id / "work.md"
+        approved_work = work_path.read_text()
+        work_path.write_text(approved_work + "\nchanged after approval\n")
+        result = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "transition", loop_id,
+                "ready_for_development", "--actor", "loop-coordinator",
+                "--reason", "should fail",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode != 0 and "subject changed after approval" in result.stderr
+        work_path.write_text(approved_work)
         run(
             root,
             "transition",
@@ -206,6 +328,136 @@ def main() -> None:
             "回退支付",
         )
         assert composite.startswith("al-")
+        assured = run(root, "init", "--title", "根因修复", "--level", "standard")
+        assured_dir = root / ".agentloop" / "loops" / assured
+        assured_path = assured_dir / "loop.yaml"
+        assured_loop = yaml.safe_load(assured_path.read_text())
+        assured_loop["state"] = "development_preparing"
+        assured_loop["execution_profile"]["status"] = "confirmed"
+        assured_loop["routing"]["status"] = "decided"
+        assured_loop["routing"]["development"]["main_flow"] = "root-cause"
+        assured_loop["classification"].update({
+            "primary_type": "内部改进",
+            "basis": "控制程序根因修复",
+            "obligations": [
+                {
+                    "obligation_id": f"ROOT-{index}",
+                    "kind": kind,
+                    "requirement": kind,
+                    "source": "README.md",
+                    "status": "confirmed",
+                }
+                for index, kind in enumerate((
+                    "baseline", "metric", "target", "external-invariants", "allowed-scope"
+                ), 1)
+            ],
+        })
+        assured_path.write_text(
+            yaml.safe_dump(assured_loop, allow_unicode=True, sort_keys=False)
+        )
+        (assured_dir / "development-assurance.yaml").write_text(
+            yaml.safe_dump({
+                "schema_version": 1,
+                "loop_id": assured,
+                "requirement_version": 1,
+                "route": "root-cause",
+                "obligations": [],
+            }, allow_unicode=True, sort_keys=False)
+        )
+        sys_path = Path(__file__).with_name("agentloop.py")
+        subprocess.run(
+            ["python3", "-c", (
+                "import importlib.util,yaml;"
+                f"s=importlib.util.spec_from_file_location('a',{str(sys_path)!r});"
+                "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
+                f"r=m.Path({str(root)!r});"
+                f"l=yaml.safe_load(m.loop_path(r,{assured!r}).read_text());"
+                "m.write_control_snapshot(r,l)"
+            )],
+            check=True,
+        )
+        rejected = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "transition", assured,
+                "developing", "--actor", "development-agent", "--reason", "missing",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert rejected.returncode != 0 and "assurance obligations are missing" in rejected.stderr
+        source_ids = [
+            item["obligation_id"] for item in assured_loop["classification"]["obligations"]
+        ]
+        (assured_dir / "development-assurance.yaml").write_text(
+            yaml.safe_dump({
+                "schema_version": 1,
+                "loop_id": assured,
+                "requirement_version": 1,
+                "route": "root-cause",
+                "obligations": [
+                    {
+                        "obligation_id": obligation_id,
+                        "scope_id": None,
+                        "source_obligation_ids": source_ids,
+                        "artifact_paths": ["README.md"],
+                        "checks": ["可重复检查"],
+                        "gate_ids": [],
+                        "recovery": "退回 development_preparing",
+                    }
+                    for obligation_id in ("reproduction", "failing-regression")
+                ],
+            }, allow_unicode=True, sort_keys=False)
+        )
+        run(
+            root, "transition", assured, "developing",
+            "--actor", "development-agent", "--reason", "assurance complete",
+        )
+        assured_loop = yaml.safe_load(assured_path.read_text())
+        assured_loop["state"] = "verifying"
+        assured_path.write_text(
+            yaml.safe_dump(assured_loop, allow_unicode=True, sort_keys=False)
+        )
+        subprocess.run(
+            ["python3", "-c", (
+                "import importlib.util,yaml;"
+                f"s=importlib.util.spec_from_file_location('a',{str(sys_path)!r});"
+                "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
+                f"r=m.Path({str(root)!r});"
+                f"l=yaml.safe_load(m.loop_path(r,{assured!r}).read_text());"
+                "m.write_control_snapshot(r,l)"
+            )],
+            check=True,
+        )
+        missing_report = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "evidence", assured,
+                "--flow-id", "root-cause-flow", "--executor", "code",
+                "--command-json", "[\"python3\",\"-c\",\"pass\"]",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert missing_report.returncode != 0 and "flow evidence requires" in missing_report.stderr
+        contradictory = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "evidence", assured,
+                "--check-id", "build", "--executor", "command",
+                "--result", "failed",
+                "--command-json", "[\"python3\",\"-c\",\"pass\"]",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert contradictory.returncode != 0 and "contradicts" in contradictory.stderr
+        runtime_schema = root / ".agentloop" / "schemas" / "loop.schema.json"
+        runtime_schema.write_text("{}\n")
+        stale_runtime = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "validate"],
+            text=True,
+            capture_output=True,
+        )
+        assert stale_runtime.returncode != 0 and "runtime Schema is stale" in stale_runtime.stderr
+        run(root, "runtime-upgrade")
         epic_ids = run(
             root,
             "init",

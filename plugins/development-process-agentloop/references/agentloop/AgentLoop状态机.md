@@ -106,10 +106,10 @@ epic
 | 状态 | 含义 | 主要负责人 | 出口条件 |
 |---|---|---|---|
 | `draft` | 已记录原始需求并完成初步复杂度分流 | 需求 Agent | 原始问题、背景及 `provisional` 执行档位已记录 |
-| `clarifying` | 核对事实、目标、范围、验收和原型 | 需求 Agent | 每项验收有稳定 ID、独立来源和可观察结果，执行档位已设为 `confirmed` |
+| `clarifying` | 核对事实、目标、范围、验收和原型 | 需求 Agent | 分类义务集合、稳定验收 ID、独立来源、可观察结果和执行档位资格完整 |
 | `awaiting_requirement_confirmation` | 执行需求确认 Gate | 需求负责人或审批策略 | 有效人工事件，或自动确认条件全部满足 |
 | `ready_for_development` | 需求已确认，选择开发流程；复合/epic 在此完成总体编码前准备 | 开发 Agent 与协调者 | Git 基线、路由和“验收义务→实现→契约→验证”映射可用 |
-| `development_preparing` | 调查现有实现并完成编码前产物 | 开发 Agent | 编码前控制闭环通过；原型、接口、数据及旧产物迁移路径按需完整 |
+| `development_preparing` | 调查现有实现并完成编码前产物 | 开发 Agent | 通用 assurance 或原型专用闭环通过；接口、数据及旧产物迁移路径按需完整 |
 | `developing` | 编码、构建、静态检查和必要单元测试 | 开发 Agent | 开发自检完成；按验证策略直接验收或形成测试交接 |
 | `ready_for_verification` | 开发交付等待测试接收 | 测试 Agent | 验证身份、tested commit、独立基线、执行器和入口检查完成 |
 | `verifying` | 执行流程验证 | 测试 Agent | 从独立基线重算的必验集合全部被当前身份的 active Evidence 覆盖 |

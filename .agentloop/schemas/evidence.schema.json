@@ -42,6 +42,203 @@
           "duration_ms": {"type": "integer", "minimum": 0},
           "stdout_path": {"type": ["string", "null"]},
           "stderr_path": {"type": ["string", "null"]},
+          "coverage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "prototype_path", "route", "region_id", "interaction_id",
+                "acceptance_id", "automation_step", "evidence_paths"
+              ],
+              "properties": {
+                "prototype_path": {"type": "string", "minLength": 1},
+                "route": {"type": "string", "minLength": 1},
+                "region_id": {"type": "string", "minLength": 1},
+                "interaction_id": {"type": "string", "minLength": 1},
+                "acceptance_id": {"type": "string", "minLength": 1},
+                "automation_step": {"type": "string", "minLength": 1},
+                "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+              }
+            }
+          },
+          "visual": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["viewport", "comparison", "allowed_differences", "pass_criteria", "references", "result"],
+            "properties": {
+              "viewport": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["width", "height"],
+                "properties": {
+                  "width": {"type": "integer", "minimum": 1},
+                  "height": {"type": "integer", "minimum": 1}
+                }
+              },
+              "comparison": {"enum": ["dom", "screenshot", "both"]},
+              "allowed_differences": {"type": "array", "items": {"type": "string"}},
+              "pass_criteria": {"type": "string", "minLength": 1},
+              "references": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["prototype_path", "reference_path", "implementation_path"],
+                  "properties": {
+                    "prototype_path": {"type": "string", "minLength": 1},
+                    "reference_path": {"type": "string", "minLength": 1},
+                    "implementation_path": {"type": "string", "minLength": 1}
+                  }
+                }
+              },
+              "result": {"enum": ["passed", "failed"]}
+            }
+          },
+          "data_lineage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sentinel", "database", "backend", "frontend"],
+            "properties": {
+              "sentinel": {"type": "string", "minLength": 1},
+              "database": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["generated_by", "objects", "observed_sentinel", "evidence_paths"],
+                "properties": {
+                  "generated_by": {"enum": ["seed", "factory", "fixture"]},
+                  "objects": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+                  "observed_sentinel": {"type": "string", "minLength": 1},
+                  "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                }
+              },
+              "backend": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["endpoints", "observed_sentinel", "evidence_paths"],
+                "properties": {
+                  "endpoints": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+                  "observed_sentinel": {"type": "string", "minLength": 1},
+                  "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                }
+              },
+              "frontend": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["routes", "observed_sentinel", "evidence_paths"],
+                "properties": {
+                  "routes": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+                  "observed_sentinel": {"type": "string", "minLength": 1},
+                  "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                }
+              }
+            }
+          },
+          "test_report": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "format", "code_commit", "run_nonce", "assertions", "executed_steps", "skipped_required"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "format": {"enum": ["agentloop-json", "junit"]},
+              "code_commit": {"type": "string", "minLength": 1},
+              "run_nonce": {"type": "string", "minLength": 16},
+              "assertions": {"type": "integer", "minimum": 1},
+              "executed_steps": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+              "skipped_required": {"type": "integer", "const": 0}
+            }
+          },
+          "business_function": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["interactions", "journeys"],
+            "properties": {
+              "interactions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "interaction_id", "assertion_count", "skipped", "ui_action", "operation",
+                    "response", "persistence", "readback", "refresh", "relogin", "error",
+                    "permission", "downstream", "audit", "evidence_paths"
+                  ],
+                  "properties": {
+                    "interaction_id": {"type": "string", "minLength": 1},
+                    "assertion_count": {"type": "integer", "minimum": 1},
+                    "skipped": {"const": false},
+                    "ui_action": {"const": true},
+                    "operation": {"const": true},
+                    "response": {"const": true},
+                    "persistence": {"const": true},
+                    "readback": {"const": true},
+                    "refresh": {"const": true},
+                    "relogin": {"const": true},
+                    "error": {"const": true},
+                    "permission": {"const": true},
+                    "downstream": {"const": true},
+                    "audit": {"const": true},
+                    "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                  }
+                }
+              },
+              "journeys": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["journey_id", "steps", "assertion_count", "skipped", "evidence_paths"],
+                  "properties": {
+                    "journey_id": {"type": "string", "minLength": 1},
+                    "steps": {
+                      "type": "array",
+                      "minItems": 8,
+                      "items": {"enum": ["create", "edit", "save", "refresh", "relogin", "query", "downstream", "audit"]},
+                      "uniqueItems": true
+                    },
+                    "assertion_count": {"type": "integer", "minimum": 1},
+                    "skipped": {"const": false},
+                    "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                  }
+                }
+              }
+            }
+          },
+          "navigation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["edges"],
+            "properties": {
+              "edges": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "interaction_id", "outcome_id", "source_route", "action",
+                    "direct_navigation", "observed_target", "evidence_paths"
+                  ],
+                  "properties": {
+                    "interaction_id": {"type": "string", "minLength": 1},
+                    "outcome_id": {"type": "string", "minLength": 1},
+                    "source_route": {"type": "string", "minLength": 1},
+                    "action": {"const": "user_action"},
+                    "direct_navigation": {"const": false},
+                    "observed_target": {"type": "string", "minLength": 1},
+                    "evidence_paths": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {"type": "string", "minLength": 1}
+                    }
+                  }
+                }
+              }
+            }
+          },
           "artifacts": {
             "type": "array",
             "items": {

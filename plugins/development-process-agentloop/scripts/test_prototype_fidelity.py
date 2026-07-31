@@ -119,6 +119,7 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
+        loop["classification"]["control_version"] = 1
         pages = [page(index) for index in range(1, 4)]
         for item in pages:
             path = root / item["prototype_path"]

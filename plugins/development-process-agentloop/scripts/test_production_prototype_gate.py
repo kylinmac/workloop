@@ -48,6 +48,7 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
+        loop["classification"]["control_version"] = 1
         prototype_path = root / "design" / "budget.html"
         prototype_path.parent.mkdir()
         prototype_path.write_text(
@@ -241,6 +242,14 @@ def main() -> None:
         verified = call(root, "transition", loop_id, "verified", "--actor", "verify", "--reason", "业务与视觉独立通过")
         assert verified.returncode == 0, verified.stderr
 
+        evidence_path = loop_dir / "evidence.yaml"
+        tampered_evidence = yaml.safe_load(evidence_path.read_text())
+        tampered_evidence["runs"][-1]["result"] = "failed"
+        write_yaml(evidence_path, tampered_evidence)
+        detected_evidence = call(root, "status")
+        assert detected_evidence.returncode != 0 and "unauthorized" in detected_evidence.stderr
+        assert yaml.safe_load(evidence_path.read_text())["runs"][-1]["result"] == "passed"
+
         tampered = yaml.safe_load(loop_path.read_text())
         tampered["state"] = "developing"
         write_yaml(loop_path, tampered)
@@ -255,6 +264,7 @@ def main() -> None:
         composite_id = composite.stdout.strip()
         composite_path = root / ".agentloop" / "loops" / composite_id / "loop.yaml"
         parent = yaml.safe_load(composite_path.read_text())
+        parent["classification"]["control_version"] = 1
         parent["state"] = "orchestrating"
         parent["routing"]["status"] = "decided"
         parent["routing"]["verification"]["new_flows"] = ["integration-command"]

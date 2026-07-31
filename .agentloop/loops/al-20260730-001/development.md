@@ -112,3 +112,9 @@ git diff --check
 ## 需求版本 6 补充：设计原则与流程重构
 
 新增唯一原则文档，避免在各流程重复定义同一控制语义；需求阶段建立独立验收义务，开发阶段建立义务到实现/契约/验证的映射，测试阶段独立重算集合并按精确身份消费 Evidence。状态机补齐五项契约，交接和恢复协议补齐证据替代、最小失效、旧产物迁移及五路径回归。控制程序只增加一项必要检查：doctor 必须确认设计原则已进入插件发布快照。
+
+## 需求版本 7：实现方案
+
+使用两个共享契约修复文档层缺口：`classification.obligations` 负责需求类型义务，`development-assurance.yaml` 负责路线义务到来源、产物、检查、Gate 和恢复的映射。各路线只声明必需 obligation ID，不复制 Schema。
+
+控制层在共享入口修复：快照 v2 覆盖 Evidence 核心字段且缺失失败；Gate 消费时复算 subject；人工批准支持宿主 HMAC 认证并限制状态；flow Evidence 统一要求 nonce/commit/断言报告；增加 `repair-control` 和 `runtime-upgrade`。回归覆盖伪造批准、摘要变化、快照删除、Evidence 篡改、assurance 缺项、result 冲突、非 UI flow 无报告和 Schema 漂移。

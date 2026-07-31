@@ -1,0 +1,58 @@
+schema_version: 1
+loop_id: al-20260730-007
+requirement_version: 1
+pages:
+  - prototype_path: design/01-dashboard.html
+    route: /dashboard
+    subflow_id: sf-01-dashboard
+    regions:
+      - region_id: summary
+        layout: 三列指标卡，桌面端同排
+        required_controls:
+          - control_id: detail-link
+            description: 查看详情链接
+    interactions:
+      - interaction_id: open-detail
+        region_id: summary
+        control_id: detail-link
+        effect: client_only_exempt
+        precondition_database_state: 不适用；导航不改变业务数据
+        action: 点击查看详情
+        operation_id:
+        expected_response: 不适用；客户端路由
+        persistence_assertion: 不产生业务写入
+        readback_operation_id:
+        refresh_assertion: 刷新后仍位于正式详情路由
+        relogin_assertion: 重新登录后详情路由按权限可访问
+        error_assertion: 路由加载失败显示错误状态
+        permission_assertion: 无权限用户进入 403
+        downstream_assertion: 不适用；纯导航
+        audit_assertion: 不适用；纯导航
+        reuse_or_exemption: 纯客户端路由，后端数据由详情页读取契约覆盖
+        state_change: 跳转到 /dashboard/detail
+        acceptance_ids: [AC-UI-01]
+        source_behavior_ids: [behavior-4e71ac04a25d88b1, behavior-287b042807b7a0b4]
+        journey_required: true
+        navigation:
+          source_route: /dashboard
+          trigger: click
+          direct_entry_allowed: false
+          outcomes:
+            - outcome_id: open-dashboard-detail
+              source_behavior_id: behavior-287b042807b7a0b4
+              condition: 用户点击查看详情
+              expected_target: /dashboard/detail
+    states:
+      loading: 显示骨架屏
+      empty: 显示空数据说明
+      error: 显示重试入口
+      unauthorized: 跳转 403 页面
+    data_sources: [GET /api/dashboard]
+    business_data:
+      - display_id: summary-metrics
+        source_type: api_field
+        source: GET /api/dashboard response.summary
+        empty_behavior: 暂无数据
+    permissions: [dashboard:view]
+    responsive: [宽度小于 768px 时指标卡单列]
+    allowed_deviations: []

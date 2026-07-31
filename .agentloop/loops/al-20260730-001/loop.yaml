@@ -7,20 +7,54 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: verified
-requirement_version: 6
-updated_at: '2026-07-31T13:52:50+08:00'
+  qualifications:
+    single_delivery_unit: true
+    scope_known: true
+    low_risk: false
+    directly_observable: false
+    concurrent_work: false
+state: developing
+requirement_version: 7
+updated_at: '2026-07-31T15:04:48+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
   development: development-agent
   verification: verification-agent
 classification:
+  control_version: 2
   primary_type: 内部改进
   tags:
   - ui
   - prototype
   - verification-gate
+  basis: 改善 AgentLoop 控制完整性和文档实现一致性，外部产品行为不变
+  obligations:
+  - obligation_id: IMP-baseline
+    kind: baseline
+    requirement: 修复审查确认的控制旁路与文档闭环缺口
+    source: agentloop/audits/2026-07-31-AgentLoop闭环审查修正清单.md
+    status: confirmed
+  - obligation_id: IMP-metric
+    kind: metric
+    requirement: 所有确认缺陷均有问题档案和负向回归
+    source: agentloop/issues/README.md
+    status: confirmed
+  - obligation_id: IMP-target
+    kind: target
+    requirement: 快照、Gate、Evidence、分类和开发路线门禁自动拒绝违规推进
+    source: 当前用户请求
+    status: confirmed
+  - obligation_id: IMP-invariants
+    kind: external-invariants
+    requirement: 旧 Loop 保持可读且通过显式升级恢复
+    source: agentloop/AgentLoop设计原则.md
+    status: confirmed
+  - obligation_id: IMP-scope
+    kind: allowed-scope
+    requirement: 仅修改 AgentLoop 协议、Schema、插件控制程序、示例和测试
+    source: 当前用户请求
+    status: confirmed
 prototype:
   implementation_basis: false
   type: null
@@ -53,8 +87,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-006
-    subject_digest: 95800eb3e289b724ed89157c96ba56012d8890efbf774f9547f61da48f2e3661
+    event_id: gate-007
+    subject_digest: 5e6bbd3ca9eeb110ded48827155fd7e4d3acfd86c0c8f60f54f65d838f681226
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -169,6 +203,23 @@ gate_events:
   reason: 用户要求修改插件并补齐历史问题档案
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-007
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-chat-local-attestation
+  source_event_id: turn-20260731-close-audit-gaps
+  authentication: local_attestation
+  requirement_version: 7
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: 5853257efd88ec33dfb951d7496082e9b9c1f1bdf1ab8feb1188af807efa59b1
+  artifact_digest: 5e6bbd3ca9eeb110ded48827155fd7e4d3acfd86c0c8f60f54f65d838f681226
+  at: '2026-07-31T15:04:21+08:00'
+  reason: 用户要求修正误判、逐项落问题文档并完成修复
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
@@ -206,25 +257,25 @@ git:
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T11:48:32+08:00'
+  decided_at: '2026-07-31T15:04:37+08:00'
   decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 矩阵、旅程和 Evidence 共用同一缺失清单，缺少原型源独立覆盖基线
+    reason: 确认缺陷集中在共享控制入口和跨文档语义映射
     supporting_flows: []
     required_outputs:
-    - prototype-behavior-inventory
-    - navigation-causality-gate
+    - development-assurance
     - issue-archive
   verification:
     policy: targeted
-    reason: 覆盖行为漏项、分支漏项、直接 URL 绕过、真实点击通过及问题档案完整性
+    reason: 完整插件回归包含快照、Gate、Evidence、分类、assurance 与升级负向样例
     reused_flows: []
     new_flows: []
     executors: {}
 files:
   requirement: requirement.md
   development: development.md
+  development_assurance: development-assurance.yaml
   evidence: evidence.yaml
 execution:
   execution_id: null
@@ -1117,3 +1168,53 @@ transitions:
   evidence:
   - al-20260730-001-evidence-11
   reason: 完整插件回归、引用同步、示例 Schema、doctor 与文档检查均通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T14:45:29+08:00'
+  requirement_version: 6
+  git_commit: a8ef7686c73c36f737e96c5c3820be055046f703
+  evidence:
+  - /Users/apple/.codex/attachments/1b3ab70e-cee2-451c-987a-80f260798715/pasted-text.txt
+  reason: 人工审查发现新的分类、流程、Gate、快照与Evidence控制缺口，退回需求澄清形成修正清单
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T15:04:05+08:00'
+  requirement_version: 7
+  git_commit: a8ef7686c73c36f737e96c5c3820be055046f703
+  evidence:
+  - .agentloop/loops/al-20260730-001/requirement.md
+  reason: 修正清单、十一项独立问题、兼容边界和机器验收标准已确认
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T15:04:29+08:00'
+  requirement_version: 7
+  git_commit: a8ef7686c73c36f737e96c5c3820be055046f703
+  evidence:
+  - gate-007
+  reason: 本地 attestation 已记录当前用户明确授权，subject digest 与需求版本 7 一致
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T15:04:42+08:00'
+  requirement_version: 7
+  git_commit: a8ef7686c73c36f737e96c5c3820be055046f703
+  evidence:
+  - .agentloop/loops/al-20260730-001/development-assurance.yaml
+  reason: 分类义务、执行资格、根因路由、Git 基线和统一 assurance 已建立
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T15:04:48+08:00'
+  requirement_version: 7
+  git_commit: a8ef7686c73c36f737e96c5c3820be055046f703
+  evidence:
+  - .agentloop/loops/al-20260730-001/development-assurance.yaml
+  reason: 根因复现、失败回归、产物路径和恢复方案通过 assurance 门禁

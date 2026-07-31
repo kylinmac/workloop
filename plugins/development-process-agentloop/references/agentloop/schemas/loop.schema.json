@@ -23,7 +23,19 @@
       "properties": {
         "level": {"enum": ["trivial", "standard", "composite"]},
         "status": {"enum": ["provisional", "confirmed"]},
-        "reason": {"type": "string", "minLength": 1}
+        "reason": {"type": "string", "minLength": 1},
+        "qualifications": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["single_delivery_unit", "scope_known", "low_risk", "directly_observable", "concurrent_work"],
+          "properties": {
+            "single_delivery_unit": {"type": "boolean"},
+            "scope_known": {"type": "boolean"},
+            "low_risk": {"type": "boolean"},
+            "directly_observable": {"type": "boolean"},
+            "concurrent_work": {"type": "boolean"}
+          }
+        }
       }
     },
     "state": {
@@ -51,8 +63,25 @@
       "additionalProperties": false,
       "required": ["primary_type", "tags"],
       "properties": {
-        "primary_type": {"type": "string"},
-        "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+        "control_version": {"enum": [1, 2]},
+        "primary_type": {"enum": ["待确认", "从 0 建设", "新增能力", "修改现有行为", "缺陷修复", "内部改进", "迁移升级", "下线删除", "技术研究"]},
+        "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "basis": {"type": "string"},
+        "obligations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["obligation_id", "kind", "requirement", "source", "status"],
+            "properties": {
+              "obligation_id": {"type": "string", "minLength": 1},
+              "kind": {"type": "string", "minLength": 1},
+              "requirement": {"type": "string", "minLength": 1},
+              "source": {"type": "string", "minLength": 1},
+              "status": {"const": "confirmed"}
+            }
+          }
+        }
       }
     },
     "prototype": {"$ref": "#/$defs/prototype"},
@@ -77,6 +106,7 @@
         "requirement": {"type": "string"},
         "development": {"type": "string"},
         "evidence": {"type": "string"},
+        "development_assurance": {"type": "string"},
         "prototype_behavior_inventory": {"type": "string"},
         "prototype_matrix": {"type": "string"},
         "user_flow_slices": {"type": "string"},
@@ -153,6 +183,22 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "properties": {"control_version": {"const": 2}},
+            "required": ["control_version"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "classification": {"required": ["basis", "obligations"]},
+          "execution_profile": {"required": ["qualifications"]}
+        }
+      }
+    },
     {
       "if": {"properties": {"loop_kind": {"const": "epic"}}},
       "then": {
@@ -341,6 +387,7 @@
         "actor": {"type": "string"},
         "source": {"type": "string"},
         "source_event_id": {"type": "string"},
+        "authentication": {"enum": ["host_hmac", "local_attestation"]},
         "requirement_version": {"type": "integer", "minimum": 1},
         "digest_algorithm": {"const": "sha256-manifest-v1"},
         "subject_files": {

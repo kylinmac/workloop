@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -70,6 +71,26 @@ AUTOMATION_SUFFIXES = {
     ".php", ".py", ".rb", ".rs", ".sh", ".swift", ".ts", ".tsx",
 }
 VAGUE_PROTOTYPE_ACCEPTANCE = {"按原型实现", "还原原型", "与原型一致"}
+CLASSIFICATION_OBLIGATIONS = {
+    "从 0 建设": {"target-users", "system-boundary", "minimum-delivery", "success-criteria"},
+    "新增能力": {"problem", "existing-relation", "scope", "invariants", "acceptance"},
+    "修改现有行为": {"current-behavior", "target-behavior", "difference", "reason", "invariants", "compatibility"},
+    "缺陷修复": {"actual-behavior", "expected-behavior", "expectation-source", "impact", "severity"},
+    "内部改进": {"baseline", "metric", "target", "external-invariants", "allowed-scope"},
+    "迁移升级": {"current-state", "target-state", "migration-scope", "compatibility-window", "rollback", "completion"},
+    "下线删除": {"consumers", "removal-scope", "data-retention", "transition-window", "recovery", "completion"},
+    "技术研究": {"decision", "constraints", "candidates", "thresholds", "downstream-impact"},
+}
+ROUTE_ASSURANCE_OBLIGATIONS = {
+    "quick-change": {"impact-scope"},
+    "business-process": {"state-model"},
+    "data-contract": {"contract", "data-model"},
+    "domain-model": {"invariants"},
+    "architecture": {"boundaries", "data-ownership", "quality-thresholds"},
+    "root-cause": {"reproduction", "failing-regression"},
+    "migration-compatibility": {"inventory", "compatibility", "rollback-or-approval"},
+    "technical-validation": {"hypothesis", "thresholds", "experiment"},
+}
 
 
 def now() -> str:
@@ -143,8 +164,28 @@ def controlled_payload(root: Path, loop: dict) -> dict:
         "subflows": {
             item["subflow_id"]: item["state"] for item in loop.get("subflows", [])
         },
+        "evidence": {
+            item["evidence_id"]: {
+                key: item.get(key)
+                for key in (
+                    "flow_id", "check_id", "subflow_id", "requirement_version",
+                    "executor", "result", "exit_code", "validity", "code_commit",
+                )
+            }
+            for item in evidence.get("runs", [])
+        },
+    }
+
+
+def legacy_controlled_payload(root: Path, loop: dict) -> dict:
+    payload = controlled_payload(root, loop)
+    return {
+        "state": payload["state"],
+        "gates": payload["gates"],
+        "subflows": payload["subflows"],
         "evidence_validity": {
-            item["evidence_id"]: item["validity"] for item in evidence.get("runs", [])
+            evidence_id: value["validity"]
+            for evidence_id, value in payload["evidence"].items()
         },
     }
 
@@ -159,7 +200,7 @@ def write_control_snapshot(root: Path, loop: dict) -> None:
     path = control_snapshot_path(root, loop["loop_id"])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
-        "algorithm": "sha256-control-v1",
+        "algorithm": "sha256-control-v2",
         "digest": hashlib.sha256(encoded).hexdigest(),
         "payload": payload,
     }, ensure_ascii=False, indent=2) + "\n")
@@ -168,14 +209,22 @@ def write_control_snapshot(root: Path, loop: dict) -> None:
 def verify_control_snapshot(root: Path, loop_path_value: Path, loop: dict) -> None:
     path = control_snapshot_path(root, loop["loop_id"])
     if not path.is_file():
-        write_control_snapshot(root, loop)
-        return
+        raise ValueError(
+            f"control snapshot is missing: {path}; restore it from Git with "
+            f"`agentloop repair-control {loop['loop_id']}`"
+        )
     snapshot = json.loads(path.read_text())
     expected = snapshot["payload"]
     encoded = json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()
     if snapshot.get("digest") != hashlib.sha256(encoded).hexdigest():
         raise ValueError(f"control snapshot is corrupt: {path}")
-    actual = controlled_payload(root, loop)
+    if snapshot.get("algorithm") == "sha256-control-v1":
+        actual = legacy_controlled_payload(root, loop)
+        if actual == expected:
+            write_control_snapshot(root, loop)
+            return
+    else:
+        actual = controlled_payload(root, loop)
     if actual == expected:
         return
     loop["state"] = expected["state"]
@@ -189,10 +238,19 @@ def verify_control_snapshot(root: Path, loop_path_value: Path, loop: dict) -> No
     evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
     if evidence_path.is_file():
         evidence = load_yaml(evidence_path)
-        validities = expected["evidence_validity"]
-        for run in evidence.get("runs", []):
-            if run["evidence_id"] in validities:
-                run["validity"] = validities[run["evidence_id"]]
+        if "evidence" in expected:
+            controlled_runs = expected["evidence"]
+            evidence["runs"] = [
+                run for run in evidence.get("runs", [])
+                if run["evidence_id"] in controlled_runs
+            ]
+            for run in evidence["runs"]:
+                run.update(controlled_runs[run["evidence_id"]])
+        else:
+            validities = expected["evidence_validity"]
+            for run in evidence.get("runs", []):
+                if run["evidence_id"] in validities:
+                    run["validity"] = validities[run["evidence_id"]]
         atomic_yaml(evidence_path, evidence)
     raise ValueError("unauthorized state/Gate/subflow/evidence modification detected and restored")
 
@@ -303,6 +361,108 @@ def integration_data_declaration_errors(loop: dict) -> list[str]:
     if "integration_data" not in loop:
         return ["integration_data decision must be explicitly declared before requirement confirmation"]
     return []
+
+
+def classification_errors(loop: dict) -> list[str]:
+    classification = loop.get("classification", {})
+    if classification.get("control_version", 1) < 2:
+        return []
+    primary_type = classification.get("primary_type")
+    if primary_type not in CLASSIFICATION_OBLIGATIONS:
+        return ["classification primary_type is not confirmed"]
+    if not classification.get("basis", "").strip():
+        return ["classification basis is missing"]
+    obligations = classification.get("obligations", [])
+    ids = [item.get("obligation_id") for item in obligations]
+    errors = []
+    if len(ids) != len(set(ids)):
+        errors.append("classification obligation_id values must be unique")
+    actual = {item.get("kind") for item in obligations}
+    missing = CLASSIFICATION_OBLIGATIONS[primary_type] - actual
+    if missing:
+        errors.append(f"classification obligations are missing: {sorted(missing)}")
+    return errors
+
+
+def execution_profile_errors(root: Path, loop: dict) -> list[str]:
+    if loop.get("classification", {}).get("control_version", 1) < 2:
+        return []
+    qualifications = loop.get("execution_profile", {}).get("qualifications", {})
+    level = loop["execution_profile"]["level"]
+    errors = []
+    if level == "trivial" and not (
+        qualifications.get("single_delivery_unit")
+        and qualifications.get("scope_known")
+        and qualifications.get("low_risk")
+        and qualifications.get("directly_observable")
+        and not qualifications.get("concurrent_work")
+    ):
+        errors.append("trivial execution profile qualifications are not satisfied")
+    project = load_yaml(root / ".agentloop" / "project.yaml")
+    forbidden = set(project["verification_policy"]["self_check_forbidden_tags"])
+    tags = set(loop.get("classification", {}).get("tags", []))
+    if loop["routing"]["verification"]["policy"] == "self_check" and tags & forbidden:
+        errors.append(f"self_check is forbidden by classification tags: {sorted(tags & forbidden)}")
+    if loop["routing"]["verification"]["policy"] == "self_check" and level != "trivial":
+        errors.append("self_check requires a trivial execution profile")
+    return errors
+
+
+def development_assurance_errors(
+    root: Path, loop: dict, subflow: dict | None = None
+) -> list[str]:
+    if loop.get("classification", {}).get("control_version", 1) < 2:
+        return []
+    route = subflow["main_flow"] if subflow else loop["routing"]["development"]["main_flow"]
+    if route == "product-prototype" or (
+        subflow is None and loop["execution_profile"]["level"] == "trivial"
+    ):
+        return []
+    relative = loop.get("files", {}).get("development_assurance")
+    if not relative:
+        return ["files.development_assurance is missing"]
+    path = loop_dir(root, loop["loop_id"]) / relative
+    errors = validate_file(path, "development-assurance.schema.json")
+    if errors:
+        return errors
+    assurance = load_yaml(path)
+    if assurance["loop_id"] != loop["loop_id"]:
+        errors.append("development assurance loop_id mismatch")
+    if assurance["requirement_version"] != loop["requirement_version"]:
+        errors.append("development assurance requirement_version mismatch")
+    if subflow is None and assurance["route"] != route:
+        errors.append("development assurance route mismatch")
+    source_ids = {
+        item["obligation_id"] for item in loop["classification"].get("obligations", [])
+    }
+    scope_id = subflow["subflow_id"] if subflow else None
+    scoped = [
+        item for item in assurance["obligations"]
+        if item.get("scope_id") == scope_id
+    ]
+    actual = {item["obligation_id"] for item in scoped}
+    missing = ROUTE_ASSURANCE_OBLIGATIONS.get(route, set()) - actual
+    if missing:
+        errors.append(f"development assurance obligations are missing: {sorted(missing)}")
+    for item in scoped:
+        unknown = set(item["source_obligation_ids"]) - source_ids
+        if unknown:
+            errors.append(
+                f"development assurance {item['obligation_id']} has unknown sources: {sorted(unknown)}"
+            )
+        for relative_path in item["artifact_paths"]:
+            artifact = project_file(root, relative_path)
+            if artifact is None or not artifact.is_file():
+                errors.append(
+                    f"development assurance {item['obligation_id']} artifact is missing: {relative_path}"
+                )
+        for gate_id in item.get("gate_ids", []):
+            gate_value = loop["gates"].get(gate_id)
+            if not gate_value or gate_value.get("status") not in {"approved", "not_required"}:
+                errors.append(
+                    f"development assurance {item['obligation_id']} Gate is not satisfied: {gate_id}"
+                )
+    return errors
 
 
 def integration_data_verification_errors(
@@ -1062,9 +1222,21 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
         "verified", "done",
     }
     for loop in loops:
+        gate_ids = set()
+        if loop.get("state") not in {"draft", "clarifying", "awaiting_requirement_confirmation"}:
+            gate_ids.add("requirement_confirmation")
+        if loop.get("state") == "done":
+            gate_ids.add("completion")
+        if loop.get("gates", {}).get("routing_confirmation", {}).get("status") == "approved":
+            gate_ids.add("routing_confirmation")
+        errors.extend(gate_subject_errors(root, loop, gate_ids))
+        if loop.get("state") not in {"draft", "clarifying"}:
+            errors.extend(classification_errors(loop))
+            errors.extend(execution_profile_errors(root, loop))
         if loop.get("state") in prepared_states:
             errors.extend(prototype_preparation_errors(root, loop))
             errors.extend(prototype_business_preparation_errors(root, loop))
+            errors.extend(development_assurance_errors(root, loop))
         if loop.get("state") in {"verified", "done"}:
             errors.extend(prototype_verification_errors(root, loop, flows))
             errors.extend(prototype_business_verification_errors(root, loop))
@@ -1076,6 +1248,7 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             }:
                 errors.extend(prototype_preparation_errors(root, loop, subflow))
                 errors.extend(prototype_business_preparation_errors(root, loop, subflow))
+                errors.extend(development_assurance_errors(root, loop, subflow))
             if subflow.get("state") == "passed":
                 errors.extend(prototype_verification_errors(root, loop, flows, subflow))
                 errors.extend(prototype_business_verification_errors(root, loop, subflow))
@@ -1178,6 +1351,7 @@ def base_loop(
     files = {"work": "work.md"} if level == "trivial" else {
         "requirement": "requirement.md",
         "development": "development.md",
+        "development_assurance": "development-assurance.yaml",
         "evidence": "evidence.yaml",
     }
     value = {
@@ -1190,6 +1364,13 @@ def base_loop(
             "level": level,
             "status": "provisional",
             "reason": "根据原始请求形成的初始档位，需求确认前必须复核",
+            "qualifications": {
+                "single_delivery_unit": level != "composite",
+                "scope_known": False,
+                "low_risk": False,
+                "directly_observable": False,
+                "concurrent_work": level == "composite",
+            },
         },
         "state": "draft",
         "requirement_version": 1,
@@ -1200,7 +1381,13 @@ def base_loop(
             "development": "development-agent",
             "verification": "verification-agent",
         },
-        "classification": {"primary_type": "待确认", "tags": []},
+        "classification": {
+            "control_version": 2,
+            "primary_type": "待确认",
+            "tags": [],
+            "basis": "待需求确认",
+            "obligations": [],
+        },
         "prototype": {
             "implementation_basis": False,
             "type": None,
@@ -1417,6 +1604,13 @@ def write_loop_files(root: Path, loop: dict) -> None:
             "## 现有系统调查\n\n## 编码前产物及检查\n\n## 子流程与依赖\n\n"
             "## 实现和修改文件\n\n## 开发自检\n\n## 测试交接\n"
         )
+        atomic_yaml(directory / "development-assurance.yaml", {
+            "schema_version": 1,
+            "loop_id": loop["loop_id"],
+            "requirement_version": loop["requirement_version"],
+            "route": loop["routing"]["development"]["main_flow"],
+            "obligations": [],
+        })
     errors = schema_validator("loop.schema.json").iter_errors(loop)
     first = next(errors, None)
     if first:
@@ -1489,6 +1683,14 @@ def cmd_validate(args: argparse.Namespace) -> None:
     cases.extend((path, "flow.schema.json") for path in flow_paths)
     cases.extend((path, "evidence.schema.json") for path in (control / "loops").glob("*/evidence.yaml"))
     errors = [error for path, schema in cases for error in validate_file(path, schema)]
+    runtime_schema_root = control / "schemas"
+    if runtime_schema_root.is_dir():
+        for source in SCHEMA_ROOT.glob("*.json"):
+            target = runtime_schema_root / source.name
+            if not target.is_file() or target.read_bytes() != source.read_bytes():
+                errors.append(
+                    f"runtime Schema is stale: {target}; run `agentloop runtime-upgrade`"
+                )
     if not errors:
         loops = []
         for path in loop_paths:
@@ -1505,6 +1707,40 @@ def cmd_validate(args: argparse.Namespace) -> None:
         print("\n".join(errors), file=sys.stderr)
         raise SystemExit(1)
     print(f"passed: {len(cases)} AgentLoop files")
+
+
+def cmd_runtime_upgrade(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    control = root / ".agentloop"
+    if not control.is_dir():
+        raise ValueError("AgentLoop is not initialized")
+    shutil.copytree(SCHEMA_ROOT, control / "schemas", dirs_exist_ok=True)
+    shutil.copytree(EXAMPLE_ROOT, control / "examples", dirs_exist_ok=True)
+    print("upgraded: runtime schemas and examples")
+
+
+def cmd_repair_control(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path = control_snapshot_path(root, args.loop_id)
+    relative = path.relative_to(root).as_posix()
+    restored = run_git(root, "show", f"{args.from_commit}:{relative}")
+    snapshot = json.loads(restored)
+    encoded = json.dumps(
+        snapshot["payload"], sort_keys=True, separators=(",", ":")
+    ).encode()
+    if snapshot.get("digest") != hashlib.sha256(encoded).hexdigest():
+        raise ValueError("committed control snapshot is corrupt")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(restored if restored.endswith("\n") else restored + "\n")
+    loop_file = loop_path(root, args.loop_id)
+    loop = load_yaml(loop_file)
+    try:
+        verify_control_snapshot(root, loop_file, loop)
+    except ValueError as error:
+        if "detected and restored" not in str(error):
+            raise
+        verify_control_snapshot(root, loop_file, load_yaml(loop_file))
+    print(f"restored: {relative} from {args.from_commit}")
 
 
 def cmd_status(args: argparse.Namespace) -> None:
@@ -1604,6 +1840,34 @@ def cmd_route(args: argparse.Namespace) -> None:
             ):
                 if output not in loop["routing"]["development"]["required_outputs"]:
                     loop["routing"]["development"]["required_outputs"].append(output)
+        if (
+            loop.get("classification", {}).get("control_version", 1) >= 2
+            and loop["execution_profile"]["level"] != "trivial"
+            and args.main_flow != "product-prototype"
+        ):
+            assurance_name = loop["files"].setdefault(
+                "development_assurance", "development-assurance.yaml"
+            )
+            assurance_path = loop_dir(root, args.loop_id) / assurance_name
+            assurance = load_yaml(assurance_path) if assurance_path.is_file() else {
+                "schema_version": 1,
+                "loop_id": loop["loop_id"],
+                "requirement_version": loop["requirement_version"],
+                "route": args.main_flow,
+                "obligations": [],
+            }
+            if (
+                assurance.get("route") != args.main_flow
+                or assurance.get("requirement_version") != loop["requirement_version"]
+            ):
+                assurance["route"] = args.main_flow
+                assurance["requirement_version"] = loop["requirement_version"]
+                assurance["obligations"] = []
+            atomic_yaml(assurance_path, assurance)
+            if "development-assurance" not in loop["routing"]["development"]["required_outputs"]:
+                loop["routing"]["development"]["required_outputs"].append(
+                    "development-assurance"
+                )
         loop["routing"]["verification"].update(
             {
                 "policy": args.verification,
@@ -1634,6 +1898,53 @@ def manifest_digest(root: Path, subjects: list[str]) -> tuple[list[dict], str]:
         records.append({"path": relative, "sha256": digest})
         payload.extend(relative.encode() + b"\0" + digest.encode() + b"\n")
     return records, hashlib.sha256(payload).hexdigest()
+
+
+def gate_subject_errors(root: Path, loop: dict, gate_ids: set[str]) -> list[str]:
+    errors = []
+    events = {item["event_id"]: item for item in loop.get("gate_events", [])}
+    for gate_id in gate_ids:
+        gate_value = loop["gates"].get(gate_id)
+        if not gate_value or gate_value.get("status") != "approved":
+            continue
+        event = events.get(gate_value.get("event_id"))
+        if not event:
+            errors.append(f"{gate_id} Gate approved event is missing")
+            continue
+        if event.get("requirement_version") != loop["requirement_version"]:
+            errors.append(f"{gate_id} Gate approval belongs to another requirement version")
+            continue
+        try:
+            subjects, digest = manifest_digest(
+                root, [item["path"] for item in event.get("subject_files", [])]
+            )
+        except (OSError, ValueError) as error:
+            errors.append(f"{gate_id} Gate subject cannot be verified: {error}")
+            continue
+        if subjects != event.get("subject_files") or digest != event.get("artifact_digest"):
+            errors.append(f"{gate_id} Gate subject changed after approval")
+        if gate_value.get("subject_digest") != event.get("artifact_digest"):
+            errors.append(f"{gate_id} Gate digest does not match its event")
+    return errors
+
+
+def gate_event_signature(
+    args: argparse.Namespace, requirement_version: int, artifact_digest: str
+) -> str:
+    payload = "\0".join(
+        (
+            args.loop_id, args.gate_id, args.decision, args.actor,
+            args.source, args.source_event_id, str(requirement_version),
+            artifact_digest,
+        )
+    ).encode()
+    secret = os.environ.get("AGENTLOOP_GATE_EVENT_SECRET")
+    if not secret:
+        raise ValueError(
+            "manual Gate approval requires a host-injected "
+            "AGENTLOOP_GATE_EVENT_SECRET"
+        )
+    return hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
 
 def recover_prototype_rejection(root: Path, loop: dict, args: argparse.Namespace) -> None:
@@ -1726,10 +2037,38 @@ def cmd_gate(args: argparse.Namespace) -> None:
     path, loop = load_loop(root, args.loop_id)
     if args.gate_id not in loop["gates"]:
         raise ValueError(f"unknown Gate: {args.gate_id}")
+    expected_states = {
+        "requirement_confirmation": {"awaiting_requirement_confirmation"},
+        "routing_confirmation": {"ready_for_development"},
+        "completion": {"verified"},
+    }
+    allowed_states = expected_states.get(args.gate_id)
+    if allowed_states and loop["state"] not in allowed_states:
+        raise ValueError(
+            f"{args.gate_id} Gate cannot be decided while state is {loop['state']}"
+        )
+    if any(
+        item.get("source") == args.source
+        and item.get("source_event_id") == args.source_event_id
+        for item in loop.get("gate_events", [])
+    ):
+        raise ValueError("source event was already consumed")
     if not args.subject:
         filename = loop["files"].get("requirement") or loop["files"].get("work")
         args.subject = [str(loop_dir(root, args.loop_id).joinpath(filename).relative_to(root))]
     subjects, digest = manifest_digest(root, args.subject)
+    project = load_yaml(root / ".agentloop" / "project.yaml")
+    authentication = project["approval"].get(
+        "manual_event_authentication", "host_hmac"
+    )
+    if args.decision == "approved" and authentication == "host_hmac":
+        expected_signature = gate_event_signature(
+            args, loop["requirement_version"], digest
+        )
+        if not args.event_signature or not hmac.compare_digest(
+            args.event_signature, expected_signature
+        ):
+            raise ValueError("manual Gate event signature is invalid")
     with loop_lock(root, args.loop_id, args.actor):
         event_id = f"gate-{len(loop['gate_events']) + 1:03d}"
         event = {
@@ -1739,6 +2078,7 @@ def cmd_gate(args: argparse.Namespace) -> None:
             "actor": args.actor,
             "source": args.source,
             "source_event_id": args.source_event_id,
+            "authentication": authentication,
             "requirement_version": loop["requirement_version"],
             "digest_algorithm": "sha256-manifest-v1",
             "subject_files": subjects,
@@ -1828,11 +2168,14 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
+        errors.extend(classification_errors(loop))
+        errors.extend(execution_profile_errors(root, loop))
     if target == "ready_for_development":
         if loop["gates"]["requirement_confirmation"]["status"] != "approved":
             errors.append("requirement_confirmation Gate is not approved")
         if loop["execution_profile"]["status"] != "confirmed":
             errors.append("execution_profile is not confirmed")
+        errors.extend(gate_subject_errors(root, loop, {"requirement_confirmation"}))
     if target in {"development_preparing", "orchestrating"}:
         if loop["routing"]["status"] != "decided":
             errors.append("routing is not decided")
@@ -1840,10 +2183,16 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("Git baseline is missing")
         if loop["gates"]["routing_confirmation"]["status"] == "pending":
             errors.append("routing_confirmation Gate is pending")
+        if loop["gates"]["routing_confirmation"]["status"] == "approved":
+            errors.extend(gate_subject_errors(root, loop, {"routing_confirmation"}))
+        errors.extend(execution_profile_errors(root, loop))
+        if target == "orchestrating":
+            errors.extend(development_assurance_errors(root, loop))
     if target == "developing":
         errors.extend(prototype_preparation_errors(root, loop))
         errors.extend(prototype_business_preparation_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
+        errors.extend(development_assurance_errors(root, loop))
     if target == "orchestrating":
         if loop["execution_profile"]["level"] != "composite":
             errors.append("only composite/epic Loops enter orchestrating")
@@ -1880,6 +2229,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     if target == "done":
         if loop["gates"]["completion"]["status"] != "approved":
             errors.append("completion Gate is not approved")
+        errors.extend(gate_subject_errors(root, loop, {"completion"}))
         if loop.get("blocked"):
             errors.append("Loop still has blocked metadata")
         if current != "verified":
@@ -1899,6 +2249,7 @@ def subflow_transition_errors(root: Path, loop: dict, subflow: dict, target: str
     if target == "developing":
         errors.extend(prototype_preparation_errors(root, loop, subflow))
         errors.extend(prototype_business_preparation_errors(root, loop, subflow))
+        errors.extend(development_assurance_errors(root, loop, subflow))
     if target == "passed":
         errors.extend(prototype_verification_errors(root, loop, runtime_flows(root), subflow))
         errors.extend(prototype_business_verification_errors(root, loop, subflow))
@@ -2090,6 +2441,10 @@ def cmd_evidence(args: argparse.Namespace) -> None:
     report_path = project_file(root, args.report_path) if args.report_path else None
     if args.executor == "ui" and report_path is None:
         raise ValueError("UI evidence requires --report-path generated by the test runner")
+    if args.flow_id and report_path is None:
+        raise ValueError("flow evidence requires --report-path generated by the test runner")
+    if args.result == "blocked":
+        raise ValueError("blocked is not a test execution result; transition the Loop to blocked")
     if report_path:
         report_path.unlink(missing_ok=True)
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2150,6 +2505,14 @@ def cmd_evidence(args: argparse.Namespace) -> None:
     }
     index = len(evidence["runs"]) + 1
     outcome = "passed" if result.returncode == 0 else "failed"
+    if args.result and args.result != outcome:
+        raise ValueError(
+            f"--result {args.result} contradicts executed command result {outcome}"
+        )
+    if args.exit_code is not None and args.exit_code != result.returncode:
+        raise ValueError(
+            f"--exit-code {args.exit_code} contradicts actual exit code {result.returncode}"
+        )
     run = {
         "evidence_id": f"{args.loop_id}-evidence-{index:02d}",
         "flow_id": args.flow_id,
@@ -2249,9 +2612,35 @@ def cmd_hook(args: argparse.Namespace) -> None:
         changed = patch_paths(command)
         if not changed:
             return
+        protected_control = [
+            path for path in changed
+            if path.startswith(".agentloop/control/")
+            or path.endswith("/evidence.yaml")
+            or (
+                path.endswith("/loop.yaml")
+                and re.search(
+                    r"(?m)^\+\s*(?:state|gates|gate_events|subflows|transitions):",
+                    command,
+                )
+            )
+        ]
+        if protected_control:
+            emit(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": (
+                            "AgentLoop control state and Evidence must be changed "
+                            "through agentloop commands: " + ", ".join(protected_control)
+                        ),
+                    }
+                }
+            )
+            return
         if all(
             path.startswith(
-                (".agentloop/", "agentloop/", "plugins/development-process-agentloop/")
+                ("agentloop/", "plugins/development-process-agentloop/")
             )
             for path in changed
         ):
@@ -2324,7 +2713,7 @@ def cmd_doctor(_: argparse.Namespace) -> None:
         raise ValueError("missing plugin assets: " + ", ".join(missing))
     for name in (
         "project", "loop", "flow", "evidence", "prototype-matrix",
-        "prototype-behavior-inventory",
+        "prototype-behavior-inventory", "development-assurance",
     ):
         schema_validator(f"{name}.schema.json")
     print("passed: AgentLoop plugin assets and schemas")
@@ -2347,6 +2736,12 @@ def parser() -> argparse.ArgumentParser:
     validate.set_defaults(func=cmd_validate)
     status = commands.add_parser("status")
     status.set_defaults(func=cmd_status)
+    runtime_upgrade = commands.add_parser("runtime-upgrade")
+    runtime_upgrade.set_defaults(func=cmd_runtime_upgrade)
+    repair_control = commands.add_parser("repair-control")
+    repair_control.add_argument("loop_id")
+    repair_control.add_argument("--from-commit", default="HEAD")
+    repair_control.set_defaults(func=cmd_repair_control)
 
     prototype_scan = commands.add_parser("prototype-scan")
     prototype_scan.add_argument("loop_id")
@@ -2376,6 +2771,7 @@ def parser() -> argparse.ArgumentParser:
     gate_parser.add_argument("--actor", required=True)
     gate_parser.add_argument("--source", required=True)
     gate_parser.add_argument("--source-event-id", required=True)
+    gate_parser.add_argument("--event-signature")
     gate_parser.add_argument("--subject", action="append")
     gate_parser.add_argument("--reason")
     gate_parser.add_argument("--affected-page", action="append")

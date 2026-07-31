@@ -12,6 +12,7 @@ CASES = {
     "flow.schema.json": ["flow.yaml", "ui-visual.flow.yaml"],
     "evidence.schema.json": ["evidence.yaml", "ui-visual.evidence.yaml"],
     "prototype-matrix.schema.json": ["prototype-matrix.yaml"],
+    "development-assurance.schema.json": ["development-assurance.yaml"],
     "loop.schema.json": [
         "trivial.loop.yaml",
         "standard.loop.yaml",

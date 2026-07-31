@@ -1,13 +1,13 @@
 {
-  "algorithm": "sha256-control-v1",
-  "digest": "5bb3af6472690f609bdcb6c75e48ed6a7b8e0c121f989887dedeb79b123e7d5e",
+  "algorithm": "sha256-control-v2",
+  "digest": "acfc3e9222ed9ff7595de67c49b9e11c1967bc456594dd5b0903f2da985a03f0",
   "payload": {
-    "state": "verified",
+    "state": "developing",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
-        "event_id": "gate-006",
-        "subject_digest": "95800eb3e289b724ed89157c96ba56012d8890efbf774f9547f61da48f2e3661"
+        "event_id": "gate-007",
+        "subject_digest": "5e6bbd3ca9eeb110ded48827155fd7e4d3acfd86c0c8f60f54f65d838f681226"
       },
       "routing_confirmation": {
         "status": "not_required",
@@ -26,18 +26,128 @@
       }
     },
     "subflows": {},
-    "evidence_validity": {
-      "al-20260730-001-evidence-01": "stale",
-      "al-20260730-001-evidence-02": "stale",
-      "al-20260730-001-evidence-03": "active",
-      "al-20260730-001-evidence-04": "active",
-      "al-20260730-001-evidence-05": "active",
-      "al-20260730-001-evidence-06": "active",
-      "al-20260730-001-evidence-07": "active",
-      "al-20260730-001-evidence-08": "active",
-      "al-20260730-001-evidence-09": "active",
-      "al-20260730-001-evidence-10": "active",
-      "al-20260730-001-evidence-11": "active"
+    "evidence": {
+      "al-20260730-001-evidence-01": {
+        "flow_id": null,
+        "check_id": "prototype-fidelity-regression",
+        "subflow_id": null,
+        "requirement_version": 1,
+        "executor": "code",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "stale",
+        "code_commit": "9bd8823"
+      },
+      "al-20260730-001-evidence-02": {
+        "flow_id": null,
+        "check_id": "integration-data-lineage-regression",
+        "subflow_id": null,
+        "requirement_version": 2,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "stale",
+        "code_commit": "658b2153dccbbd12afd4a8954fedc97eb4485698"
+      },
+      "al-20260730-001-evidence-03": {
+        "flow_id": null,
+        "check_id": "production-prototype-control-regression",
+        "subflow_id": null,
+        "requirement_version": 3,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "a50d207bdf48341975c18469bdf4e7611e440c59"
+      },
+      "al-20260730-001-evidence-04": {
+        "flow_id": null,
+        "check_id": "subflow-tested-commit-regression",
+        "subflow_id": null,
+        "requirement_version": 4,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "2f22ea5870bac7a85e7fd3838a9e2c190f8094b7"
+      },
+      "al-20260730-001-evidence-05": {
+        "flow_id": null,
+        "check_id": "integration-checkpoint-parent-aggregation",
+        "subflow_id": null,
+        "requirement_version": 5,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "9ddd01d01c877a422882e725c457a0635986f4cd"
+      },
+      "al-20260730-001-evidence-06": {
+        "flow_id": null,
+        "check_id": "mixed-flow-parent-aggregation",
+        "subflow_id": null,
+        "requirement_version": 5,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c"
+      },
+      "al-20260730-001-evidence-07": {
+        "flow_id": null,
+        "check_id": "full-plugin-regression-v6",
+        "subflow_id": null,
+        "requirement_version": 6,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "9216f53c535c6815ff5529afd2203c46302a3d6f"
+      },
+      "al-20260730-001-evidence-08": {
+        "flow_id": null,
+        "check_id": "full-plugin-regression-v6-legacy-recovery",
+        "subflow_id": null,
+        "requirement_version": 6,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "acf5502741fbc40d75976460a9a02a34f7419cec"
+      },
+      "al-20260730-001-evidence-09": {
+        "flow_id": null,
+        "check_id": "full-plugin-regression-v6-unique-behavior-id",
+        "subflow_id": null,
+        "requirement_version": 6,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "8e151f5c68470a17b511200868085c0d9619cde4"
+      },
+      "al-20260730-001-evidence-10": {
+        "flow_id": null,
+        "check_id": "full-plugin-regression-v6-evidence-lifecycle",
+        "subflow_id": null,
+        "requirement_version": 6,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "30a2fd19c68b482e6a7dcf9608555f9eb01670dd"
+      },
+      "al-20260730-001-evidence-11": {
+        "flow_id": null,
+        "check_id": "full-plugin-regression-v6-design-principles",
+        "subflow_id": null,
+        "requirement_version": 6,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c"
+      }
     }
   }
 }
