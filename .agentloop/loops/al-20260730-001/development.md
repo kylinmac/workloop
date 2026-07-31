@@ -118,3 +118,7 @@ git diff --check
 使用两个共享契约修复文档层缺口：`classification.obligations` 负责需求类型义务，`development-assurance.yaml` 负责路线义务到来源、产物、检查、Gate 和恢复的映射。各路线只声明必需 obligation ID，不复制 Schema。
 
 控制层在共享入口修复：快照 v2 覆盖 Evidence 核心字段且缺失失败；Gate 消费时复算 subject；人工批准支持宿主 HMAC 认证并限制状态；flow Evidence 统一要求 nonce/commit/断言报告；增加 `repair-control` 和 `runtime-upgrade`。回归覆盖伪造批准、摘要变化、快照删除、Evidence 篡改、assurance 缺项、result 冲突、非 UI flow 无报告和 Schema 漂移。
+
+## 需求版本 7 补充：澄清分类门禁死锁
+
+根因是仓库级校验会遍历所有 Loop：新建 Loop 的 `draft/clarifying` 已被放行，但澄清前取消的旧 Loop 仍以 `primary_type: 待确认` 触发分类完整性检查，从而污染新 Loop。共享语义校验现按确认阶段判断：`draft/clarifying`、澄清前 blocked 和 cancelled 允许待确认；进入 `awaiting_requirement_confirmation` 仍失败关闭。回归覆盖“旧 Loop 取消 → 新 composite 初始化 → draft/clarifying 校验 → 未确认时尝试进入 Gate”完整路径。
