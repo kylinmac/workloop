@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: verified
+state: developing
 requirement_version: 6
-updated_at: '2026-07-31T12:03:43+08:00'
+updated_at: '2026-07-31T12:08:26+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -808,3 +808,49 @@ transitions:
   evidence:
   - al-20260730-001-evidence-07
   reason: 完整插件生命周期、原型行为漏项与直接 URL 绕过回归全部通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T12:08:25+08:00'
+  requirement_version: 6
+  git_commit: 3d27e555884b72a26f3284f2e726519846dec492
+  evidence: []
+  reason: workflow 重试发现旧 Loop 在 completion rejection 与 prototype-scan 之间形成升级恢复死锁
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T12:08:26+08:00'
+  requirement_version: 6
+  git_commit: 3d27e555884b72a26f3284f2e726519846dec492
+  evidence: []
+  reason: 该死锁属于需求版本 6 的升级兼容与合法恢复验收范围
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T12:08:26+08:00'
+  requirement_version: 6
+  git_commit: 3d27e555884b72a26f3284f2e726519846dec492
+  evidence: []
+  reason: 沿用已批准的需求版本 6
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:08:26+08:00'
+  requirement_version: 6
+  git_commit: 3d27e555884b72a26f3284f2e726519846dec492
+  evidence: []
+  reason: 准备 completion 恢复兼容修复
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:08:26+08:00'
+  requirement_version: 6
+  git_commit: 3d27e555884b72a26f3284f2e726519846dec492
+  evidence:
+  - agentloop/issues/013-旧Loop升级时completion恢复死锁.md
+  reason: 严格 Gate 默认不变，仅恢复定位路径兼容旧 Loop

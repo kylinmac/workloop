@@ -363,7 +363,11 @@ def integration_data_verification_errors(
     return errors + candidate_errors
 
 
-def load_prototype_matrix(root: Path, loop: dict) -> tuple[dict | None, list[str]]:
+def load_prototype_matrix(
+    root: Path,
+    loop: dict,
+    require_inventory: bool = True,
+) -> tuple[dict | None, list[str]]:
     if not prototype_is_required(loop) and not any(
         prototype_is_required(loop, subflow) for subflow in loop.get("subflows", [])
     ):
@@ -438,10 +442,11 @@ def load_prototype_matrix(root: Path, loop: dict) -> tuple[dict | None, list[str
             errors.append(
                 f"prototype page acceptance mapping is incomplete or unknown: {page['prototype_path']}"
             )
-    inventory, inventory_errors = load_prototype_behavior_inventory(root, loop)
-    errors.extend(inventory_errors)
-    if inventory is not None:
-        errors.extend(prototype_behavior_mapping_errors(root, loop, matrix, inventory))
+    if require_inventory:
+        inventory, inventory_errors = load_prototype_behavior_inventory(root, loop)
+        errors.extend(inventory_errors)
+        if inventory is not None:
+            errors.extend(prototype_behavior_mapping_errors(root, loop, matrix, inventory))
     return matrix, errors
 
 
@@ -1622,7 +1627,7 @@ def recover_prototype_rejection(root: Path, loop: dict, args: argparse.Namespace
         return
     if not args.reason or not args.affected_page:
         raise ValueError("prototype completion rejection requires --reason and --affected-page")
-    matrix, errors = load_prototype_matrix(root, loop)
+    matrix, errors = load_prototype_matrix(root, loop, require_inventory=False)
     if errors or matrix is None:
         raise ValueError("; ".join(errors))
     affected = set(args.affected_page)

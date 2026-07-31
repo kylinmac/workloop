@@ -385,6 +385,11 @@ def main() -> None:
             "--actor", "loop-coordinator", "--reason", "原型覆盖与视觉证据完整",
         )
         assert passed.returncode == 0, passed.stderr
+        legacy_loop = yaml.safe_load(loop_path.read_text())
+        legacy_loop["files"].pop("prototype_behavior_inventory")
+        loop_path.write_text(yaml.safe_dump(legacy_loop, allow_unicode=True, sort_keys=False))
+        (loop_dir / "prototype-behavior-inventory.yaml").unlink()
+        AGENTLOOP.write_control_snapshot(root, legacy_loop)
         recovered = call(
             root, "gate", loop_id, "completion",
             "--decision", "rejected",
