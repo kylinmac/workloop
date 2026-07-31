@@ -450,8 +450,15 @@ def load_prototype_matrix(
     return matrix, errors
 
 
-def prototype_behavior_id(path: str, kind: str, event: str, line: int, target: str) -> str:
-    value = f"{path}\0{kind}\0{event}\0{line}\0{target}"
+def prototype_behavior_id(
+    path: str,
+    kind: str,
+    event: str,
+    line: int,
+    column: int,
+    target: str,
+) -> str:
+    value = f"{path}\0{kind}\0{event}\0{line}\0{column}\0{target}"
     return f"behavior-{hashlib.sha256(value.encode()).hexdigest()[:16]}"
 
 
@@ -467,6 +474,7 @@ def scan_prototype_behaviors(path: Path, relative_path: str) -> list[dict]:
         for kind, pattern, group in patterns:
             for match in pattern.finditer(source):
                 event = match.group(group) if kind == "event" else "navigation"
+                source_column = match.start() + 1
                 target = (
                     match.group(1).strip()[-160:]
                     if kind == "event"
@@ -474,11 +482,12 @@ def scan_prototype_behaviors(path: Path, relative_path: str) -> list[dict]:
                 )
                 found.append({
                     "behavior_id": prototype_behavior_id(
-                        relative_path, kind, event, line_number, target
+                        relative_path, kind, event, line_number, source_column, target
                     ),
                     "kind": kind,
                     "event": event,
                     "source_line": line_number,
+                    "source_column": source_column,
                     "target": target,
                 })
     return found
@@ -1534,6 +1543,11 @@ def cmd_prototype_scan(args: argparse.Namespace) -> None:
         "scanner": "agentloop-static-v1",
         "sources": sources,
     }
+    behavior_ids = [
+        behavior["behavior_id"] for source in sources for behavior in source["behaviors"]
+    ]
+    if len(behavior_ids) != len(set(behavior_ids)):
+        raise ValueError("prototype scanner generated duplicate behavior_id values")
     errors = list(schema_validator("prototype-behavior-inventory.schema.json").iter_errors(inventory))
     if errors:
         raise ValueError(

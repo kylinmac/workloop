@@ -26,12 +26,13 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["behavior_id", "kind", "event", "source_line", "target"],
+              "required": ["behavior_id", "kind", "event", "source_line", "source_column", "target"],
               "properties": {
                 "behavior_id": {"type": "string", "minLength": 1},
                 "kind": {"enum": ["event", "navigation"]},
                 "event": {"enum": ["click", "submit", "change", "input", "navigation"]},
                 "source_line": {"type": "integer", "minimum": 1},
+                "source_column": {"type": "integer", "minimum": 1},
                 "target": {"type": "string", "minLength": 1}
               }
             }

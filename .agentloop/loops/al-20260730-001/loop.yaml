@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: verified
+state: developing
 requirement_version: 6
-updated_at: '2026-07-31T12:09:12+08:00'
+updated_at: '2026-07-31T12:13:27+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -884,3 +884,49 @@ transitions:
   evidence:
   - al-20260730-001-evidence-08
   reason: 新建与旧版无 inventory 的 completion 恢复路径均通过完整回归
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T12:13:26+08:00'
+  requirement_version: 6
+  git_commit: b38dc613bba22c12d373f49e87519a5b395311c8
+  evidence: []
+  reason: workflow 真实 01–09 原型扫描发现同行行为 ID 冲突
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T12:13:27+08:00'
+  requirement_version: 6
+  git_commit: b38dc613bba22c12d373f49e87519a5b395311c8
+  evidence: []
+  reason: 扫描 ID 唯一性属于需求版本 6 的机器可检查行为基线
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T12:13:27+08:00'
+  requirement_version: 6
+  git_commit: b38dc613bba22c12d373f49e87519a5b395311c8
+  evidence: []
+  reason: 沿用已批准的需求版本 6
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:13:27+08:00'
+  requirement_version: 6
+  git_commit: b38dc613bba22c12d373f49e87519a5b395311c8
+  evidence: []
+  reason: 准备源码列号稳定 ID 修复
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:13:27+08:00'
+  requirement_version: 6
+  git_commit: b38dc613bba22c12d373f49e87519a5b395311c8
+  evidence:
+  - agentloop/issues/014-同行重复行为产生重复ID.md
+  reason: ID 加入源码列号并在写入前做唯一性自检

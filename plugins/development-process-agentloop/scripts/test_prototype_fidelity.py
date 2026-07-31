@@ -100,6 +100,12 @@ def evidence_row(item: dict) -> dict:
 def main() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        repeated = root / "same-line.html"
+        repeated.write_text("<a href='/same'>a</a><a href='/same'>b</a><a href='/same'>c</a>")
+        repeated_behaviors = AGENTLOOP.scan_prototype_behaviors(repeated, "same-line.html")
+        assert len(repeated_behaviors) == 3
+        assert len({item["behavior_id"] for item in repeated_behaviors}) == 3
+        assert len({item["source_column"] for item in repeated_behaviors}) == 3
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
         subprocess.run(["git", "config", "user.name", "AgentLoop Test"], cwd=root, check=True)
         subprocess.run(["git", "config", "user.email", "agentloop@example.invalid"], cwd=root, check=True)

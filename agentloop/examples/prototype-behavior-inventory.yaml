@@ -10,9 +10,11 @@ sources:
         kind: event
         event: click
         source_line: 120
+        source_column: 1
         target: document.getElementById('detail-link')
       - behavior_id: behavior-287b042807b7a0b4
         kind: navigation
         event: navigation
         source_line: 121
+        source_column: 1
         target: /dashboard/detail
