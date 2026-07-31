@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: developing
+state: verified
 requirement_version: 6
-updated_at: '2026-07-31T12:39:10+08:00'
+updated_at: '2026-07-31T12:39:45+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -259,7 +259,7 @@ integration_verification:
   verification_failure_roundtrips: 0
 verification_handoff:
   requirement_version: 6
-  code_commit: 8e151f5c68470a17b511200868085c0d9619cde4
+  code_commit: 30a2fd19c68b482e6a7dcf9608555f9eb01670dd
   changed_files:
   - plugins/development-process-agentloop/scripts/agentloop.py
   - plugins/development-process-agentloop/scripts/test_prototype_fidelity.py
@@ -272,6 +272,8 @@ verification_handoff:
   - agentloop/issues/README.md
   - agentloop/issues/013-旧Loop升级时completion恢复死锁.md
   - agentloop/issues/014-同行重复行为产生重复ID.md
+  - agentloop/issues/015-新Evidence未淘汰同范围旧记录.md
+  - agentloop/issues/016-Transition接受不存在的Git提交.md
   - rules/AgentLoop问题复盘规则.md
   check: python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
@@ -1007,3 +1009,32 @@ transitions:
   - agentloop/issues/015-新Evidence未淘汰同范围旧记录.md
   - agentloop/issues/016-Transition接受不存在的Git提交.md
   reason: 新 Evidence 确定性淘汰同范围旧记录；transition 由 Git 解析并规范化提交
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:39:34+08:00'
+  requirement_version: 6
+  git_commit: 30a2fd19c68b482e6a7dcf9608555f9eb01670dd
+  evidence:
+  - commit:30a2fd19c68b482e6a7dcf9608555f9eb01670dd
+  reason: Evidence 替代、Git 提交解析及负向回归完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T12:39:34+08:00'
+  requirement_version: 6
+  git_commit: 30a2fd19c68b482e6a7dcf9608555f9eb01670dd
+  evidence: []
+  reason: 接收 Evidence 生命周期与提交可信性修复
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T12:39:45+08:00'
+  requirement_version: 6
+  git_commit: 30a2fd19c68b482e6a7dcf9608555f9eb01670dd
+  evidence:
+  - al-20260730-001-evidence-10
+  reason: 同范围重跑仅最新 Evidence active，不存在提交被拒绝，完整插件回归通过
