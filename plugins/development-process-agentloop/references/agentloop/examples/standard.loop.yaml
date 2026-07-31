@@ -7,6 +7,12 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单一交付单元但涉及业务规则
+  qualifications:
+    single_delivery_unit: true
+    scope_known: true
+    low_risk: false
+    directly_observable: true
+    concurrent_work: false
 state: ready_for_verification
 requirement_version: 1
 updated_at: "2026-07-30T14:00:00+08:00"
@@ -16,8 +22,23 @@ owners:
   development: development-agent
   verification: verification-agent
 classification:
+  control_version: 2
   primary_type: 新增能力
   tags: [workflow-state]
+  basis: 在退款系统内增加幂等能力
+  obligations:
+    - {obligation_id: REQ-01, kind: problem, requirement: 重复请求会重复创建退款, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-02, kind: existing-relation, requirement: 复用现有退款接口, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-03, kind: scope, requirement: 仅修改退款创建链路, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-04, kind: invariants, requirement: 首次退款行为不变, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-05, kind: acceptance, requirement: 重复键只产生一条退款, source: requirement.md, status: confirmed}
+acceptance_obligations:
+  - acceptance_id: AC-01
+    criterion: 同一幂等键重复请求只产生一条退款
+    source: requirement.md
+    required: true
+    implementation_paths: [src/refund/**]
+    verification: {flow_id: null, check_id: refund-targeted, executor: code, subflow_id: null}
 scope:
   claim: active
   claimed_at: "2026-07-30T11:00:00+08:00"

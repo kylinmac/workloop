@@ -119,8 +119,36 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
-        loop["classification"]["control_version"] = 1
         pages = [page(index) for index in range(1, 4)]
+        loop["classification"].update({
+            "primary_type": "内部改进",
+            "basis": "验证产品原型控制门禁",
+            "obligations": [
+                {
+                    "obligation_id": f"IMP-{index}",
+                    "kind": kind,
+                    "requirement": kind,
+                    "source": "requirement.md",
+                    "status": "confirmed",
+                }
+                for index, kind in enumerate((
+                    "baseline", "metric", "target", "external-invariants", "allowed-scope"
+                ), 1)
+            ],
+        })
+        loop["acceptance_obligations"] = [{
+            "acceptance_id": item["interactions"][0]["acceptance_ids"][0],
+            "criterion": f"{item['route']} 完整满足原型",
+            "source": item["prototype_path"],
+            "required": True,
+            "implementation_paths": [f"web{item['route']}"],
+            "verification": {
+                "flow_id": "prototype-ui",
+                "check_id": None,
+                "executor": "ui",
+                "subflow_id": None,
+            },
+        } for item in pages]
         for item in pages:
             path = root / item["prototype_path"]
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,6 +266,9 @@ def main() -> None:
                 "flow_id": "prototype-ui",
                 "check_id": None,
                 "subflow_id": None,
+                "acceptance_ids": [
+                    item["interactions"][0]["acceptance_ids"][0] for item in pages
+                ],
                 "requirement_version": 1,
                 "executor": "ui",
                 "command": ["open", "/page-1"],

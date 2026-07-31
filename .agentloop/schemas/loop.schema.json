@@ -84,6 +84,55 @@
         }
       }
     },
+    "acceptance_obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["acceptance_id", "criterion", "source", "required", "implementation_paths", "verification"],
+        "properties": {
+          "acceptance_id": {"type": "string", "minLength": 1},
+          "criterion": {"type": "string", "minLength": 1},
+          "source": {"type": "string", "minLength": 1},
+          "required": {"type": "boolean"},
+          "implementation_paths": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "uniqueItems": true
+          },
+          "verification": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["flow_id", "check_id", "executor", "subflow_id"],
+                "properties": {
+                  "flow_id": {"type": ["string", "null"]},
+                  "check_id": {"type": ["string", "null"]},
+                  "executor": {"enum": ["code", "ui", "command"]},
+                  "subflow_id": {"type": ["string", "null"]}
+                },
+                "oneOf": [
+                  {
+                    "properties": {
+                      "flow_id": {"type": "string", "minLength": 1},
+                      "check_id": {"type": "null"}
+                    }
+                  },
+                  {
+                    "properties": {
+                      "flow_id": {"type": "null"},
+                      "check_id": {"type": "string", "minLength": 1}
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
     "prototype": {"$ref": "#/$defs/prototype"},
     "integration_data": {"$ref": "#/$defs/integration_data"},
     "scope": {"$ref": "#/$defs/scope"},
@@ -193,6 +242,7 @@
         }
       },
       "then": {
+        "required": ["acceptance_obligations"],
         "properties": {
           "classification": {"required": ["basis", "obligations"]},
           "execution_profile": {"required": ["qualifications"]}

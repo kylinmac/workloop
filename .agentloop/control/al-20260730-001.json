@@ -1,13 +1,13 @@
 {
-  "algorithm": "sha256-control-v2",
-  "digest": "b3668be1136e02331d47d2f4e2a9947be92ca98a5c3d520f57335b051d0d8b6e",
+  "algorithm": "sha256-control-v3",
+  "digest": "442b0fc871dde9d965992cfd4ec08f2be071c157f75ba9c7448e2d9b1a59fe06",
   "payload": {
-    "state": "verified",
+    "state": "developing",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
-        "event_id": "gate-008",
-        "subject_digest": "d238e5a9a5db87b20572eebd3c44c111643273e6b3b644141a9a1f47028a49a1"
+        "event_id": "gate-009",
+        "subject_digest": "0f4fc5c1f93b025ed62ba1649b78d82f873143ada89f58ec54ccebfda8468d23"
       },
       "routing_confirmation": {
         "status": "not_required",
@@ -36,7 +36,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "stale",
-        "code_commit": "9bd8823"
+        "code_commit": "9bd8823",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-02": {
         "flow_id": null,
@@ -47,7 +48,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "stale",
-        "code_commit": "658b2153dccbbd12afd4a8954fedc97eb4485698"
+        "code_commit": "658b2153dccbbd12afd4a8954fedc97eb4485698",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-03": {
         "flow_id": null,
@@ -58,7 +60,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "a50d207bdf48341975c18469bdf4e7611e440c59"
+        "code_commit": "a50d207bdf48341975c18469bdf4e7611e440c59",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-04": {
         "flow_id": null,
@@ -69,7 +72,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "2f22ea5870bac7a85e7fd3838a9e2c190f8094b7"
+        "code_commit": "2f22ea5870bac7a85e7fd3838a9e2c190f8094b7",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-05": {
         "flow_id": null,
@@ -80,7 +84,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "9ddd01d01c877a422882e725c457a0635986f4cd"
+        "code_commit": "9ddd01d01c877a422882e725c457a0635986f4cd",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-06": {
         "flow_id": null,
@@ -91,7 +96,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c"
+        "code_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-07": {
         "flow_id": null,
@@ -102,7 +108,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "9216f53c535c6815ff5529afd2203c46302a3d6f"
+        "code_commit": "9216f53c535c6815ff5529afd2203c46302a3d6f",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-08": {
         "flow_id": null,
@@ -113,7 +120,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "acf5502741fbc40d75976460a9a02a34f7419cec"
+        "code_commit": "acf5502741fbc40d75976460a9a02a34f7419cec",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-09": {
         "flow_id": null,
@@ -124,7 +132,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "8e151f5c68470a17b511200868085c0d9619cde4"
+        "code_commit": "8e151f5c68470a17b511200868085c0d9619cde4",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-10": {
         "flow_id": null,
@@ -135,7 +144,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "30a2fd19c68b482e6a7dcf9608555f9eb01670dd"
+        "code_commit": "30a2fd19c68b482e6a7dcf9608555f9eb01670dd",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-11": {
         "flow_id": null,
@@ -146,7 +156,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c"
+        "code_commit": "5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-12": {
         "flow_id": null,
@@ -157,7 +168,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "9ab804d9df33a7a530b8bebe382e820a69a67449"
+        "code_commit": "9ab804d9df33a7a530b8bebe382e820a69a67449",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-13": {
         "flow_id": null,
@@ -168,7 +180,8 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd"
+        "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd",
+        "acceptance_ids": null
       },
       "al-20260730-001-evidence-14": {
         "flow_id": null,
@@ -179,7 +192,204 @@
         "result": "passed",
         "exit_code": 0,
         "validity": "active",
-        "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd"
+        "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd",
+        "acceptance_ids": null
+      }
+    },
+    "requirement_control": {
+      "classification": {
+        "control_version": 2,
+        "primary_type": "内部改进",
+        "tags": [
+          "ui",
+          "prototype",
+          "verification-gate"
+        ],
+        "basis": "改善 AgentLoop 控制完整性和文档实现一致性，外部产品行为不变",
+        "obligations": [
+          {
+            "obligation_id": "IMP-baseline",
+            "kind": "baseline",
+            "requirement": "修复审查确认的控制旁路与文档闭环缺口",
+            "source": "agentloop/audits/2026-07-31-AgentLoop闭环审查修正清单.md",
+            "status": "confirmed"
+          },
+          {
+            "obligation_id": "IMP-metric",
+            "kind": "metric",
+            "requirement": "所有确认缺陷均有问题档案和负向回归",
+            "source": "agentloop/issues/README.md",
+            "status": "confirmed"
+          },
+          {
+            "obligation_id": "IMP-target",
+            "kind": "target",
+            "requirement": "快照、Gate、Evidence、分类和开发路线门禁自动拒绝违规推进",
+            "source": "当前用户请求",
+            "status": "confirmed"
+          },
+          {
+            "obligation_id": "IMP-invariants",
+            "kind": "external-invariants",
+            "requirement": "旧 Loop 保持可读且通过显式升级恢复",
+            "source": "agentloop/AgentLoop设计原则.md",
+            "status": "confirmed"
+          },
+          {
+            "obligation_id": "IMP-scope",
+            "kind": "allowed-scope",
+            "requirement": "仅修改 AgentLoop 协议、Schema、插件控制程序、示例和测试",
+            "source": "当前用户请求",
+            "status": "confirmed"
+          }
+        ]
+      },
+      "acceptance_obligations": [
+        {
+          "acceptance_id": "AC-CTRL-01",
+          "criterion": "两个必需义务仅一个证据时 verified 失败，全部覆盖后通过",
+          "source": ".agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固",
+          "required": true,
+          "implementation_paths": [
+            "plugins/development-process-agentloop/scripts/agentloop.py",
+            "plugins/development-process-agentloop/references/agentloop/schemas/loop.schema.json"
+          ],
+          "verification": {
+            "flow_id": null,
+            "check_id": "control-hardening-regression",
+            "executor": "command",
+            "subflow_id": null
+          }
+        },
+        {
+          "acceptance_id": "AC-CTRL-02",
+          "criterion": "活动 v1 Loop 校验失败并可显式迁移为 v2",
+          "source": ".agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固",
+          "required": true,
+          "implementation_paths": [
+            "plugins/development-process-agentloop/scripts/agentloop.py",
+            "plugins/development-process-agentloop/references/agentloop/schemas/loop.schema.json"
+          ],
+          "verification": {
+            "flow_id": null,
+            "check_id": "control-hardening-regression",
+            "executor": "command",
+            "subflow_id": null
+          }
+        },
+        {
+          "acceptance_id": "AC-CTRL-03",
+          "criterion": "普通切片证据不能冒充必需集成验证",
+          "source": ".agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固",
+          "required": true,
+          "implementation_paths": [
+            "plugins/development-process-agentloop/scripts/agentloop.py"
+          ],
+          "verification": {
+            "flow_id": null,
+            "check_id": "control-hardening-regression",
+            "executor": "command",
+            "subflow_id": null
+          }
+        },
+        {
+          "acceptance_id": "AC-CTRL-04",
+          "criterion": "开发后篡改控制决策被恢复且非法状态不能重新路由",
+          "source": ".agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固",
+          "required": true,
+          "implementation_paths": [
+            "plugins/development-process-agentloop/scripts/agentloop.py"
+          ],
+          "verification": {
+            "flow_id": null,
+            "check_id": "control-hardening-regression",
+            "executor": "command",
+            "subflow_id": null
+          }
+        },
+        {
+          "acceptance_id": "AC-CTRL-05",
+          "criterion": "无第三方 Python 包时 CLI 可启动且 Hook 与升级不产生版本漂移或混合资产",
+          "source": ".agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固",
+          "required": true,
+          "implementation_paths": [
+            "plugins/development-process-agentloop/hooks/hooks.json",
+            "plugins/development-process-agentloop/scripts/schema_validation.py",
+            "plugins/development-process-agentloop/vendor/yaml/__init__.py"
+          ],
+          "verification": {
+            "flow_id": null,
+            "check_id": "control-hardening-regression",
+            "executor": "command",
+            "subflow_id": null
+          }
+        }
+      ],
+      "execution_profile": {
+        "level": "standard",
+        "status": "confirmed",
+        "reason": "单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元",
+        "qualifications": {
+          "single_delivery_unit": true,
+          "scope_known": true,
+          "low_risk": false,
+          "directly_observable": false,
+          "concurrent_work": false
+        }
+      },
+      "prototype": {
+        "implementation_basis": false,
+        "type": null,
+        "fidelity": null,
+        "pages": []
+      },
+      "integration_data": {
+        "required": false,
+        "reason": "本次修改插件规则本身，不实现前后端业务数据链路",
+        "frontend_routes": [],
+        "backend_endpoints": [],
+        "database_objects": [],
+        "verification_flow_id": null
+      }
+    },
+    "development_control": {
+      "scope": {
+        "claim": "active",
+        "claimed_at": "2026-07-30T22:53:27+08:00",
+        "paths": [
+          "requirements/flows/需求确认流程.md",
+          "development/flows/产品原型驱动流程.md",
+          "verification/flows/UI流程验证.md",
+          "development/开发流程定义规则.md",
+          "verification/测试验证流程定义规则.md",
+          "agentloop/**",
+          "plugins/development-process-agentloop/**",
+          ".agentloop/loops/al-20260730-001/**"
+        ],
+        "interfaces": [],
+        "db_objects": [],
+        "states": []
+      },
+      "routing": {
+        "status": "decided",
+        "confidence": "high",
+        "decided_at": "2026-07-31T17:02:04+08:00",
+        "decided_by": "development-agent",
+        "development": {
+          "main_flow": "root-cause",
+          "reason": "缺口集中于共享 verified、integration、snapshot 和 runtime 控制入口",
+          "supporting_flows": [],
+          "required_outputs": [
+            "development-assurance"
+          ]
+        },
+        "verification": {
+          "policy": "targeted",
+          "reason": "插件生命周期、负向门禁及系统 Python 运行回归可覆盖",
+          "reused_flows": [],
+          "new_flows": [],
+          "executors": {}
+        }
       }
     }
   }

@@ -154,7 +154,20 @@ agentloop integration-checkpoint <loop-id> \
   --evidence <当前提交上的 evidence-id>
 ```
 
-命令只接受当前 Git HEAD、当前需求版本且 `active/passed` 的 Evidence，并原子更新 `git.integration.head_commit`、`delivery_commit`、`last_checkpoint_commit`、集成检查结果和 `integration_verification.handoff`。旧提交、旧需求版本、stale、failed 或未知 Evidence 必须拒绝。
+命令只接受当前 Git HEAD、当前需求版本、父级集成 scope 且 `active/passed` 的 Evidence。子流程 Evidence、任意 targeted 检查或未声明执行器不能冒充集成验证。
+
+`integration_verification.required: true` 时必须先按以下状态序执行：
+
+```text
+pending/failed
+→ integration-transition ready_for_verification
+→ integration-transition verifying
+→ 执行 reused_flows + new_flows 中声明的全部集成 Flow
+→ integration-checkpoint 精确校验 Flow 集合、executor、acceptance_id 和当前提交
+→ passed
+```
+
+只有最后一步才原子更新 `git.integration.head_commit`、`delivery_commit`、`last_checkpoint_commit` 和集成 handoff。`required: false` 仍须用父级当前提交的合并后检查覆盖全部验收义务。旧提交、旧需求版本、子流程 scope、stale、failed、未知或能力不匹配的 Evidence 必须拒绝。
 
 同仓库 epic 不要求子 Loop 先合并到项目 `target_branch`。父 Loop 直接把每个子 Loop 的已验证交付提交作为 `source_commit` 合并到父集成分支，因此子 Loop 可以继续使用默认的 `verified_integration_branch`。跨仓库 epic 不执行 Git 合并，只锁定各仓库交付提交。
 

@@ -43,7 +43,36 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
-        loop["classification"]["control_version"] = 1
+        loop["classification"].update({
+            "control_version": 2,
+            "primary_type": "内部改进",
+            "basis": "验证数据库到 UI 的数据链路",
+            "obligations": [
+                {
+                    "obligation_id": f"IMP-{index}",
+                    "kind": kind,
+                    "requirement": kind,
+                    "source": "requirement.md",
+                    "status": "confirmed",
+                }
+                for index, kind in enumerate((
+                    "baseline", "metric", "target", "external-invariants", "allowed-scope"
+                ), 1)
+            ],
+        })
+        loop["acceptance_obligations"] = [{
+            "acceptance_id": "AC-DATA",
+            "criterion": "数据库 sentinel 经 API 展示到订单页",
+            "source": "requirement.md",
+            "required": True,
+            "implementation_paths": ["tests/orders_data_lineage.py"],
+            "verification": {
+                "flow_id": "orders-data-lineage",
+                "check_id": None,
+                "executor": "ui",
+                "subflow_id": None,
+            },
+        }]
         loop["state"] = "verified"
         loop["execution_profile"]["status"] = "confirmed"
         loop["routing"]["status"] = "decided"
@@ -58,6 +87,23 @@ def main() -> None:
             "verification_flow_id": "orders-data-lineage",
         }
         write_yaml(loop_path, loop)
+        write_yaml(loop_dir / "development-assurance.yaml", {
+            "schema_version": 1,
+            "loop_id": loop_id,
+            "requirement_version": 1,
+            "route": "quick-change",
+            "obligations": [{
+                "obligation_id": "impact-scope",
+                "scope_id": None,
+                "source_obligation_ids": [
+                    item["obligation_id"] for item in loop["classification"]["obligations"]
+                ],
+                "artifact_paths": ["README.md"],
+                "checks": ["data lineage regression"],
+                "gate_ids": [],
+                "recovery": "return to development_preparing",
+            }],
+        })
         AGENTLOOP.write_control_snapshot(root, loop)
 
         automation = root / "tests" / "orders_data_lineage.py"
@@ -90,6 +136,7 @@ def main() -> None:
             "flow_id": "orders-data-lineage",
             "check_id": None,
             "subflow_id": None,
+            "acceptance_ids": ["AC-DATA"],
             "requirement_version": 1,
             "executor": "ui",
             "command": ["python3", "tests/orders_data_lineage.py"],

@@ -7,6 +7,12 @@ execution_profile:
   level: composite
   status: confirmed
   reason: 两个可独立交付和回滚的子 Loop
+  qualifications:
+    single_delivery_unit: false
+    scope_known: true
+    low_risk: false
+    directly_observable: true
+    concurrent_work: true
 state: orchestrating
 requirement_version: 1
 updated_at: "2026-07-30T16:00:00+08:00"
@@ -16,8 +22,28 @@ owners:
   development: development-agent
   verification: verification-agent
 classification:
+  control_version: 2
   primary_type: 从 0 建设
   tags: [workflow-state]
+  basis: 建设账户与退款协同的新系统能力
+  obligations:
+    - {obligation_id: REQ-01, kind: target-users, requirement: 账户冻结后发起退款, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-02, kind: system-boundary, requirement: 账户与退款服务边界明确, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-03, kind: minimum-delivery, requirement: 账户冻结和退款创建, source: requirement.md, status: confirmed}
+    - {obligation_id: REQ-04, kind: success-criteria, requirement: 跨服务旅程通过, source: requirement.md, status: confirmed}
+acceptance_obligations:
+  - acceptance_id: AC-01
+    criterion: 账户服务可冻结目标账户
+    source: requirement.md
+    required: true
+    implementation_paths: [services/account/**]
+    verification: {flow_id: account-refund-end-to-end, check_id: null, executor: code, subflow_id: null}
+  - acceptance_id: AC-02
+    criterion: 冻结账户可创建并查询退款
+    source: requirement.md
+    required: true
+    implementation_paths: [services/refund/**]
+    verification: {flow_id: account-refund-end-to-end, check_id: null, executor: code, subflow_id: null}
 scope:
   claim: active
   claimed_at: "2026-07-30T13:00:00+08:00"

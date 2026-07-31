@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: verified
+state: developing
 requirement_version: 7
-updated_at: '2026-07-31T16:37:49+08:00'
+updated_at: '2026-07-31T17:02:46+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -87,8 +87,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-008
-    subject_digest: d238e5a9a5db87b20572eebd3c44c111643273e6b3b644141a9a1f47028a49a1
+    event_id: gate-009
+    subject_digest: 0f4fc5c1f93b025ed62ba1649b78d82f873143ada89f58ec54ccebfda8468d23
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -237,6 +237,23 @@ gate_events:
   reason: 用户明确要求修复并保持需求内容与门禁
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-009
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-host
+  source_event_id: turn-20260731-control-hardening
+  authentication: local_attestation
+  requirement_version: 7
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: 056265156d1cea16e9efcab39b08b08e74ce41196f82efc69e70901ec22e989c
+  artifact_digest: 0f4fc5c1f93b025ed62ba1649b78d82f873143ada89f58ec54ccebfda8468d23
+  at: '2026-07-31T17:01:53+08:00'
+  reason: 用户确认按审查优先项完成控制面加固
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
@@ -274,18 +291,17 @@ git:
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T15:04:37+08:00'
+  decided_at: '2026-07-31T17:02:04+08:00'
   decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 确认缺陷集中在共享控制入口和跨文档语义映射
+    reason: 缺口集中于共享 verified、integration、snapshot 和 runtime 控制入口
     supporting_flows: []
     required_outputs:
     - development-assurance
-    - issue-archive
   verification:
     policy: targeted
-    reason: 完整插件回归包含快照、Gate、Evidence、分类、assurance 与升级负向样例
+    reason: 插件生命周期、负向门禁及系统 Python 运行回归可覆盖
     reused_flows: []
     new_flows: []
     executors: {}
@@ -1340,3 +1356,108 @@ transitions:
   - al-20260730-001-evidence-13
   - al-20260730-001-evidence-14
   reason: 分类阶段回归与 al-20260731-002 真实校验均通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T16:52:11+08:00'
+  requirement_version: 7
+  git_commit: 938ccd5d866b5b1da737b73322b4a2cb6b1485a7
+  evidence: []
+  reason: 新增控制面加固：验收聚合、v2、集成、快照路由和运行时
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T17:01:48+08:00'
+  requirement_version: 7
+  git_commit: 938ccd5d866b5b1da737b73322b4a2cb6b1485a7
+  evidence: []
+  reason: 五项控制面验收义务已结构化确认
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T17:01:58+08:00'
+  requirement_version: 7
+  git_commit: 938ccd5d866b5b1da737b73322b4a2cb6b1485a7
+  evidence: []
+  reason: 需求 Gate gate-009 已通过
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T17:02:40+08:00'
+  requirement_version: 7
+  git_commit: 938ccd5d866b5b1da737b73322b4a2cb6b1485a7
+  evidence: []
+  reason: 路由、范围和五项验收实现/验证映射已建立
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T17:02:46+08:00'
+  requirement_version: 7
+  git_commit: 938ccd5d866b5b1da737b73322b4a2cb6b1485a7
+  evidence: []
+  reason: 根因、共享修复点和失败回归范围已明确
+acceptance_obligations:
+- acceptance_id: AC-CTRL-01
+  criterion: 两个必需义务仅一个证据时 verified 失败，全部覆盖后通过
+  source: .agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固
+  required: true
+  implementation_paths:
+  - plugins/development-process-agentloop/scripts/agentloop.py
+  - plugins/development-process-agentloop/references/agentloop/schemas/loop.schema.json
+  verification:
+    flow_id: null
+    check_id: control-hardening-regression
+    executor: command
+    subflow_id: null
+- acceptance_id: AC-CTRL-02
+  criterion: 活动 v1 Loop 校验失败并可显式迁移为 v2
+  source: .agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固
+  required: true
+  implementation_paths:
+  - plugins/development-process-agentloop/scripts/agentloop.py
+  - plugins/development-process-agentloop/references/agentloop/schemas/loop.schema.json
+  verification:
+    flow_id: null
+    check_id: control-hardening-regression
+    executor: command
+    subflow_id: null
+- acceptance_id: AC-CTRL-03
+  criterion: 普通切片证据不能冒充必需集成验证
+  source: .agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固
+  required: true
+  implementation_paths:
+  - plugins/development-process-agentloop/scripts/agentloop.py
+  verification:
+    flow_id: null
+    check_id: control-hardening-regression
+    executor: command
+    subflow_id: null
+- acceptance_id: AC-CTRL-04
+  criterion: 开发后篡改控制决策被恢复且非法状态不能重新路由
+  source: .agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固
+  required: true
+  implementation_paths:
+  - plugins/development-process-agentloop/scripts/agentloop.py
+  verification:
+    flow_id: null
+    check_id: control-hardening-regression
+    executor: command
+    subflow_id: null
+- acceptance_id: AC-CTRL-05
+  criterion: 无第三方 Python 包时 CLI 可启动且 Hook 与升级不产生版本漂移或混合资产
+  source: .agentloop/loops/al-20260730-001/requirement.md#需求版本-7-补充控制面生产闭环加固
+  required: true
+  implementation_paths:
+  - plugins/development-process-agentloop/hooks/hooks.json
+  - plugins/development-process-agentloop/scripts/schema_validation.py
+  - plugins/development-process-agentloop/vendor/yaml/__init__.py
+  verification:
+    flow_id: null
+    check_id: control-hardening-regression
+    executor: command
+    subflow_id: null

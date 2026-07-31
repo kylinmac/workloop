@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c 'from pathlib import Path; import os,sys; versions=[p for p in Path(sys.argv[1]).parent.iterdir() if (p / \"scripts\" / \"agentloop.py\").is_file()]; latest=max(versions, key=lambda p: p.stat().st_mtime); os.execv(sys.executable, [sys.executable, str(latest / \"scripts\" / \"agentloop.py\"), *sys.argv[2:]])' \"${PLUGIN_ROOT}\" hook session-start",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/agentloop.py\" hook session-start",
             "statusMessage": "Loading AgentLoop state",
             "additionalContextLimit": 1200
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c 'from pathlib import Path; import os,sys; versions=[p for p in Path(sys.argv[1]).parent.iterdir() if (p / \"scripts\" / \"agentloop.py\").is_file()]; latest=max(versions, key=lambda p: p.stat().st_mtime); os.execv(sys.executable, [sys.executable, str(latest / \"scripts\" / \"agentloop.py\"), *sys.argv[2:]])' \"${PLUGIN_ROOT}\" hook pre-tool",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/agentloop.py\" hook pre-tool",
             "statusMessage": "Checking AgentLoop Gate"
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c 'from pathlib import Path; import os,sys; versions=[p for p in Path(sys.argv[1]).parent.iterdir() if (p / \"scripts\" / \"agentloop.py\").is_file()]; latest=max(versions, key=lambda p: p.stat().st_mtime); os.execv(sys.executable, [sys.executable, str(latest / \"scripts\" / \"agentloop.py\"), *sys.argv[2:]])' \"${PLUGIN_ROOT}\" hook stop",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/agentloop.py\" hook stop",
             "statusMessage": "Checking AgentLoop completion"
           }
         ]

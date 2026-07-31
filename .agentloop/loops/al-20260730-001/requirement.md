@@ -163,3 +163,21 @@ UI Evidence 对导航交互必须证明从来源页面执行真实用户动作�
 1. 存在分类待确认的 cancelled 旧 Loop 时，新建 composite Loop 在 `draft` 和 `clarifying` 均能通过 `validate`。
 2. 同一 Loop 尝试进入 `awaiting_requirement_confirmation` 时仍因分类待确认而失败。
 3. 不直接编辑 `loop.yaml`，现有 `al-20260731-002` 的需求内容和状态保持不变。
+
+## 需求版本 7 补充：控制面生产闭环加固
+
+本轮修复外部审查确认的五类控制缺口：
+
+1. standard/trivial 的每个验收义务必须结构化，并映射到实际 flow/check Evidence；任一必需义务未覆盖时不得进入 `verified`。
+2. 新 Loop 固定使用分类控制 v2；旧 v1 Loop 必须通过显式升级命令迁移，不能继续静默跳过分类、档位和 assurance 门禁。
+3. integration checkpoint 必须区分合并后检查和跨交付集成验证，校验 Evidence 的 flow/check、executor、scope、提交和状态序，不得用任意 passed Evidence 直接写成集成通过。
+4. 控制快照覆盖分类、执行档位、范围、路由、集成和子交付关键字段；route 只允许在合法准备状态执行，已批准的路由变化必须使相关批准和 Evidence 失效。
+5. Hook 固定执行当前 `${PLUGIN_ROOT}` 的控制脚本；插件不依赖宿主预装 PyYAML/jsonschema；runtime-upgrade 使用临时目录校验后原子替换。
+
+验收标准：
+
+- AC-CTRL-01：两个必需验收义务只有一个 Evidence 时，standard Loop 的 `verified` 转换失败；两项都由当前提交的有效 Evidence 覆盖后通过。
+- AC-CTRL-02：新建及升级后的 Loop 都是 v2；v1 在 validate/推进时失败并给出唯一升级路径。
+- AC-CTRL-03：普通切片检查不能完成 required integration verification；只有声明的集成 flow Evidence 在集成状态序中运行后才能 checkpoint。
+- AC-CTRL-04：手工修改档位、分类、范围、路由或集成字段会被快照检测并恢复；developing/verifying 状态不能重新 route。
+- AC-CTRL-05：系统 Python 未安装 PyYAML/jsonschema 时插件核心 CLI 仍能启动；Hook 只执行自身版本；升级中断不留下混合 Schema。

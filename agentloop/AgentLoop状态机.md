@@ -126,7 +126,7 @@ epic
 | 当前状态 | 目标状态 | 必需证据 |
 |---|---|---|
 | `draft` | `clarifying` | 原始需求和 `provisional` 执行档位 |
-| `clarifying` | `awaiting_requirement_confirmation` | 带稳定 ID、独立来源和可观察结果的需求义务，必要原型、一致性检查和 `confirmed` 执行档位 |
+| `clarifying` | `awaiting_requirement_confirmation` | control v2 分类义务和验收义务完整；每条验收有稳定 `acceptance_id`、独立来源和可观察结果；必要原型、一致性检查和 `confirmed` 执行档位 |
 | `awaiting_requirement_confirmation` | `ready_for_development` | 有效审批事件或自动确认依据 |
 | `ready_for_development` | `development_preparing` | Git 基线、开发路由和验收义务映射 |
 | `ready_for_development` | `orchestrating` | 总体控制闭环、切片/子 Loop、依赖、范围、Git 集成路线及 integration_verification 决定已检查 |
@@ -134,7 +134,7 @@ epic
 | `developing` | `ready_for_verification` | 交付提交、开发自检、独立基线引用和精确验证身份；技术研究可交付实验脚本、原始结果和决策记录 |
 | `developing` | `verified` | `routing.verification.policy == self_check` 且实际结果满足全部验收 |
 | `ready_for_verification` | `verifying` | 测试范围、复用流程、执行器、精确验证身份和 tested commit |
-| `verifying` | `verified` | 独立重算的必验集合由当前 active Evidence 完整覆盖，各独立 Gate 均通过 |
+| `verifying` | `verified` | 每个必需 `acceptance_id` 的实现及 flow/check 映射完整，并由当前 tested commit 上身份匹配的 active passed Evidence 全量覆盖；各独立 Gate 均通过 |
 | `orchestrating` | `verified` | composite 或 epic 的义务、提交、Evidence 身份与生命周期及各独立 Gate 重新聚合后全部满足 |
 | `verified` | `done` | 完成 Gate 通过 |
 
@@ -152,6 +152,8 @@ epic
 协调者没有需求确认权或测试通过权，除非它同时被明确授予对应角色。同一个 Agent 可以顺序切换多个角色，但每次操作必须以实际角色记录 `actor`；多个 Agent 协作时只有协调者更新主状态，当前负责人更新自己的产物后交接。
 
 `self_check` 是明确例外：它不产生“测试 Agent 已通过”的结论。开发 Agent 记录直接验收结果后，协调者只依据已确认的 `self_check` 策略推进 `developing → verified`，不冒充测试角色。
+
+路由只允许在 `ready_for_development` 或 `development_preparing` 更新。进入 `developing` 后发现路由错误，必须先退回 `development_preparing`；不得原地改成 trivial/self_check 或降低验证策略。
 
 ## 子流程受控状态转换
 

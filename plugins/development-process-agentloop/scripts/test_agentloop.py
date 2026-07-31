@@ -71,6 +71,9 @@ def git(root: Path, *args: str) -> None:
 
 def main() -> None:
     subprocess.run(["python3", str(SYNC_REFERENCES), "verify"], check=True)
+    system_python = Path("/usr/bin/python3")
+    if system_python.exists():
+        subprocess.run([str(system_python), str(ENGINE), "doctor"], check=True)
     source_root = Path(__file__).resolve().parents[3]
     if (source_root / ".git").exists():
         subprocess.run(["python3", str(SYNC_REFERENCES), "check"], check=True)
@@ -79,11 +82,12 @@ def main() -> None:
         root = Path(directory)
         old_root = root / "cache" / "old"
         current_root = root / "cache" / "current"
-        (current_root / "scripts").mkdir(parents=True)
-        (current_root / "scripts" / "agentloop.py").write_text(
-            "from pathlib import Path\nimport sys\n"
-            "Path('hook-result').write_text(' '.join(sys.argv[1:]))\n"
-        )
+        for plugin_root, marker in ((old_root, "selected"), (current_root, "wrong")):
+            (plugin_root / "scripts").mkdir(parents=True)
+            (plugin_root / "scripts" / "agentloop.py").write_text(
+                "from pathlib import Path\nimport sys\n"
+                f"Path('hook-result').write_text({marker!r} + ':' + ' '.join(sys.argv[1:]))\n"
+            )
         hook = json.loads(HOOKS.read_text())["hooks"]["Stop"][0]["hooks"][0]["command"]
         subprocess.run(
             hook.replace("${PLUGIN_ROOT}", str(old_root)),
@@ -91,7 +95,7 @@ def main() -> None:
             shell=True,
             check=True,
         )
-        assert (root / "hook-result").read_text() == "hook stop"
+        assert (root / "hook-result").read_text() == "selected:hook stop"
 
         git(root, "init", "-q")
         git(root, "config", "user.name", "AgentLoop Test")
@@ -99,6 +103,28 @@ def main() -> None:
         (root / "README.md").write_text("# Test\n")
         git(root, "add", "README.md")
         git(root, "commit", "-qm", "baseline")
+        if system_python.exists():
+            system_init = subprocess.run(
+                [
+                    str(system_python), str(ENGINE), "--root", str(root), "init",
+                    "--title", "system python runtime", "--level", "standard",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            subprocess.run(
+                [str(system_python), str(ENGINE), "--root", str(root), "validate"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    str(system_python), str(ENGINE), "--root", str(root), "transition",
+                    system_init, "cancelled", "--actor", "test",
+                    "--reason", "system runtime verified",
+                ],
+                check=True,
+            )
 
         protected_patch = subprocess.run(
             ["python3", str(ENGINE), "--root", str(root), "hook", "pre-tool"],
@@ -177,6 +203,25 @@ def main() -> None:
                 ), 1)
             ],
         })
+        loop["acceptance_obligations"] = [
+            {
+                "acceptance_id": acceptance_id,
+                "criterion": criterion,
+                "source": "work.md",
+                "required": True,
+                "implementation_paths": ["README.md"],
+                "verification": {
+                    "flow_id": None,
+                    "check_id": "self-check",
+                    "executor": "command",
+                    "subflow_id": None,
+                },
+            }
+            for acceptance_id, criterion in (
+                ("AC-01", "README 文案变更可直接观察"),
+                ("AC-02", "相邻内容保持不变"),
+            )
+        ]
         loop_path.write_text(yaml.safe_dump(loop, allow_unicode=True, sort_keys=False))
         run(
             root,
@@ -275,6 +320,66 @@ def main() -> None:
             "--reason",
             "编码前检查通过",
         )
+        protected = yaml.safe_load(loop_path.read_text())
+        protected["execution_profile"]["level"] = "composite"
+        loop_path.write_text(yaml.safe_dump(protected, allow_unicode=True, sort_keys=False))
+        tamper_result = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "status"],
+            text=True,
+            capture_output=True,
+        )
+        assert tamper_result.returncode != 0 and "unauthorized" in tamper_result.stderr
+        assert yaml.safe_load(loop_path.read_text())["execution_profile"]["level"] == "trivial"
+        illegal_route = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "route", loop_id,
+                "--actor", "development-agent", "--confidence", "high",
+                "--main-flow", "quick-change", "--reason", "illegal reroute",
+                "--verification", "self_check", "--verification-reason", "illegal",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert illegal_route.returncode != 0 and "routing is only allowed" in illegal_route.stderr
+        run(
+            root,
+            "evidence",
+            loop_id,
+            "--check-id",
+            "self-check",
+            "--acceptance-id",
+            "AC-01",
+            "--executor",
+            "command",
+            "--command-json",
+            "[\"python3\",\"-c\",\"pass\"]",
+        )
+        incomplete = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "transition", loop_id,
+                "verified", "--actor", "loop-coordinator", "--reason", "coverage incomplete",
+                "--evidence", "work.md#开发自检",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert incomplete.returncode != 0
+        assert "acceptance evidence is incomplete" in incomplete.stderr
+        run(
+            root,
+            "evidence",
+            loop_id,
+            "--check-id",
+            "self-check",
+            "--acceptance-id",
+            "AC-01",
+            "--acceptance-id",
+            "AC-02",
+            "--executor",
+            "command",
+            "--command-json",
+            "[\"python3\",\"-c\",\"pass\"]",
+        )
         run(
             root,
             "transition",
@@ -314,6 +419,28 @@ def main() -> None:
         run(root, "validate")
         assert run(root, "status") == "no active Loops"
         assert yaml.safe_load(loop_path.read_text())["scope"]["claim"] == "released"
+
+        legacy = run(root, "init", "--title", "旧控制 Loop", "--level", "standard")
+        legacy_path = root / ".agentloop" / "loops" / legacy / "loop.yaml"
+        legacy_loop = yaml.safe_load(legacy_path.read_text())
+        legacy_loop["classification"]["control_version"] = 1
+        legacy_loop.pop("acceptance_obligations")
+        legacy_path.write_text(yaml.safe_dump(legacy_loop, allow_unicode=True, sort_keys=False))
+        legacy_validation = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "validate"],
+            text=True,
+            capture_output=True,
+        )
+        assert legacy_validation.returncode != 0 and "migrate-v2" in legacy_validation.stderr
+        run(root, "migrate-v2", legacy, "--actor", "loop-coordinator")
+        migrated = yaml.safe_load(legacy_path.read_text())
+        assert migrated["state"] == "clarifying"
+        assert migrated["classification"]["control_version"] == 2
+        assert migrated["acceptance_obligations"] == []
+        run(
+            root, "transition", legacy, "cancelled",
+            "--actor", "loop-coordinator", "--reason", "迁移回归完成",
+        )
 
         composite = run(
             root,
@@ -383,6 +510,34 @@ def main() -> None:
                 ), 1)
             ],
         })
+        assured_loop["acceptance_obligations"] = [
+            {
+                "acceptance_id": "AC-ROOT",
+                "criterion": "根因流程可执行",
+                "source": "README.md",
+                "required": True,
+                "implementation_paths": ["README.md"],
+                "verification": {
+                    "flow_id": "root-cause-flow",
+                    "check_id": None,
+                    "executor": "code",
+                    "subflow_id": None,
+                },
+            },
+            {
+                "acceptance_id": "AC-BUILD",
+                "criterion": "构建结果可信",
+                "source": "README.md",
+                "required": True,
+                "implementation_paths": ["README.md"],
+                "verification": {
+                    "flow_id": None,
+                    "check_id": "build",
+                    "executor": "command",
+                    "subflow_id": None,
+                },
+            },
+        ]
         assured_path.write_text(
             yaml.safe_dump(assured_loop, allow_unicode=True, sort_keys=False)
         )
@@ -463,6 +618,7 @@ def main() -> None:
             [
                 "python3", str(ENGINE), "--root", str(root), "evidence", assured,
                 "--flow-id", "root-cause-flow", "--executor", "code",
+                "--acceptance-id", "AC-ROOT",
                 "--command-json", "[\"python3\",\"-c\",\"pass\"]",
             ],
             text=True,
@@ -473,6 +629,7 @@ def main() -> None:
             [
                 "python3", str(ENGINE), "--root", str(root), "evidence", assured,
                 "--check-id", "build", "--executor", "command",
+                "--acceptance-id", "AC-BUILD",
                 "--result", "failed",
                 "--command-json", "[\"python3\",\"-c\",\"pass\"]",
             ],
@@ -488,7 +645,14 @@ def main() -> None:
             capture_output=True,
         )
         assert stale_runtime.returncode != 0 and "runtime Schema is stale" in stale_runtime.stderr
+        schema_dir = runtime_schema.parent
+        interrupted_backup = schema_dir.with_name(".schemas.upgrade-backup")
+        schema_dir.rename(interrupted_backup)
         run(root, "runtime-upgrade")
+        assert schema_dir.is_dir() and not interrupted_backup.exists()
+        assert runtime_schema.read_bytes() == (
+            ENGINE.parents[1] / "references" / "agentloop" / "schemas" / "loop.schema.json"
+        ).read_bytes()
         epic_ids = run(
             root,
             "init",

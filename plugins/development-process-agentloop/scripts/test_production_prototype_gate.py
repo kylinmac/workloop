@@ -29,6 +29,41 @@ def write_yaml(path: Path, value: dict) -> None:
     path.write_text(yaml.safe_dump(value, allow_unicode=True, sort_keys=False))
 
 
+def set_v2(
+    loop: dict, acceptance_id: str, flow_id: str, executor: str, subflow_id: str | None = None
+) -> None:
+    loop["classification"].update({
+        "control_version": 2,
+        "primary_type": "内部改进",
+        "basis": "验证 AgentLoop 生产门禁",
+        "obligations": [
+            {
+                "obligation_id": f"IMP-{index}",
+                "kind": kind,
+                "requirement": kind,
+                "source": "requirement.md",
+                "status": "confirmed",
+            }
+            for index, kind in enumerate((
+                "baseline", "metric", "target", "external-invariants", "allowed-scope"
+            ), 1)
+        ],
+    })
+    loop["acceptance_obligations"] = [{
+        "acceptance_id": acceptance_id,
+        "criterion": "预算保存后刷新和重登仍保持",
+        "source": "design/budget.html",
+        "required": True,
+        "implementation_paths": ["web/budget"],
+        "verification": {
+            "flow_id": flow_id,
+            "check_id": None,
+            "executor": executor,
+            "subflow_id": subflow_id,
+        },
+    }]
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -48,7 +83,7 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
-        loop["classification"]["control_version"] = 1
+        set_v2(loop, "AC-BUDGET", "budget-production", "ui")
         prototype_path = root / "design" / "budget.html"
         prototype_path.parent.mkdir()
         prototype_path.write_text(
@@ -226,12 +261,14 @@ def main() -> None:
         AGENTLOOP.write_control_snapshot(root, loop)
         evidence = call(
             root, "evidence", loop_id, "--flow-id", "budget-production", "--executor", "ui",
+            "--acceptance-id", "AC-BUDGET",
             "--command-json", '["python3","tests/budget_ui.py"]',
             "--report-path", "artifacts/budget-report.json",
         )
         assert evidence.returncode == 0, evidence.stderr
         replacement = call(
             root, "evidence", loop_id, "--flow-id", "budget-production", "--executor", "ui",
+            "--acceptance-id", "AC-BUDGET",
             "--command-json", '["python3","tests/budget_ui.py"]',
             "--report-path", "artifacts/budget-report.json",
         )
@@ -264,10 +301,30 @@ def main() -> None:
         composite_id = composite.stdout.strip()
         composite_path = root / ".agentloop" / "loops" / composite_id / "loop.yaml"
         parent = yaml.safe_load(composite_path.read_text())
-        parent["classification"]["control_version"] = 1
+        subflow_id = parent["subflows"][0]["subflow_id"]
+        set_v2(parent, "AC-BUDGET", "budget-production", "ui", subflow_id)
+        parent["acceptance_obligations"].append({
+            "acceptance_id": "AC-INTEGRATION",
+            "criterion": "集成构建在当前提交通过",
+            "source": "requirement.md",
+            "required": True,
+            "implementation_paths": ["README.md"],
+            "verification": {
+                "flow_id": "integration-command",
+                "check_id": None,
+                "executor": "command",
+                "subflow_id": None,
+            },
+        })
         parent["state"] = "orchestrating"
         parent["routing"]["status"] = "decided"
         parent["routing"]["verification"]["new_flows"] = ["integration-command"]
+        parent["integration_verification"].update({
+            "required": True,
+            "state": "pending",
+            "new_flows": ["integration-command"],
+            "executors": {"integration-command": ["command"]},
+        })
         write_yaml(root / ".agentloop" / "flows" / "integration-command.yaml", {
             "schema_version": 1,
             "flow_id": "integration-command",
@@ -281,10 +338,36 @@ def main() -> None:
             "preconditions": [],
             "steps": [{"step_id": "build", "action": "构建", "expect": "成功"}],
             "checks": ["build"],
+            "automation": {"path": "tests/integration_report.py"},
+        })
+        integration_script = root / "tests" / "integration_report.py"
+        integration_script.parent.mkdir(exist_ok=True)
+        integration_script.write_text(
+            "import json,os\n"
+            "json.dump({'code_commit':os.environ['AGENTLOOP_CODE_COMMIT'],"
+            "'run_nonce':os.environ['AGENTLOOP_RUN_NONCE'],'assertions':1,"
+            "'executed_steps':['build'],'assertions_by_step':{'build':1},"
+            "'skipped_required':0},open(os.environ['AGENTLOOP_REPORT_PATH'],'w'))\n"
+        )
+        write_yaml(composite_path.parent / "development-assurance.yaml", {
+            "schema_version": 1,
+            "loop_id": composite_id,
+            "requirement_version": 1,
+            "route": "architecture",
+            "obligations": [{
+                "obligation_id": obligation_id,
+                "scope_id": None,
+                "source_obligation_ids": [
+                    item["obligation_id"] for item in parent["classification"]["obligations"]
+                ],
+                "artifact_paths": ["README.md"],
+                "checks": ["integration regression"],
+                "gate_ids": [],
+                "recovery": "return to development_preparing",
+            } for obligation_id in ("boundaries", "data-ownership", "quality-thresholds")],
         })
         write_yaml(composite_path, parent)
         AGENTLOOP.write_control_snapshot(root, parent)
-        subflow_id = parent["subflows"][0]["subflow_id"]
         invalid_commit = call(
             root, "transition", composite_id, "development_preparing",
             "--subflow-id", subflow_id, "--actor", "coordinator", "--reason", "无效提交",
@@ -315,13 +398,6 @@ def main() -> None:
         assert AGENTLOOP.tested_commit_for_scope(parent, "sf-missing") is None
         assert AGENTLOOP.tested_commit_for_scope(parent, None) == "c4e33a5"
 
-        parent["state"] = "blocked"
-        parent["blocked"] = {
-            "reason": "旧集成提交",
-            "owner": "coordinator",
-            "unblock_condition": "记录当前集成 checkpoint",
-            "resume_state": "orchestrating",
-        }
         parent["prototype"] = loop["prototype"]
         parent["files"].update({
             "prototype_behavior_inventory": "prototype-behavior-inventory.yaml",
@@ -335,8 +411,6 @@ def main() -> None:
             "prototype_path": "design/budget.html", "route": "/budget",
         }]
         parent["subflows"][0]["verification"]["new_flows"] = ["budget-production"]
-        parent["integration_verification"]["required"] = True
-        parent["integration_verification"]["state"] = "failed"
         parent["transitions"][-1]["git_commit"] = head
         matrix = yaml.safe_load((loop_dir / "prototype-implementation-matrix.yaml").read_text())
         matrix["loop_id"] = composite_id
@@ -361,39 +435,44 @@ def main() -> None:
             "code_commit": head,
         })
         run["test_report"]["code_commit"] = head
-        invalid_run = dict(run)
-        invalid_run["evidence_id"] = f"{composite_id}-evidence-stale"
-        invalid_run["code_commit"] = "stale-commit"
         write_yaml(composite_path.parent / "evidence.yaml", {
-            "schema_version": 1, "loop_id": composite_id, "runs": [invalid_run],
+            "schema_version": 1, "loop_id": composite_id, "runs": [run],
         })
         write_yaml(composite_path, parent)
         AGENTLOOP.write_control_snapshot(root, parent)
         rejected_checkpoint = call(
             root, "integration-checkpoint", composite_id,
-            "--actor", "coordinator", "--reason", "错误提交",
-            "--evidence", invalid_run["evidence_id"],
+            "--actor", "coordinator", "--reason", "切片证据不能冒充集成验证",
+            "--evidence", run["evidence_id"],
         )
-        assert rejected_checkpoint.returncode != 0 and "current requirement and commit" in rejected_checkpoint.stderr
-        write_yaml(composite_path.parent / "evidence.yaml", {
-            "schema_version": 1, "loop_id": composite_id, "runs": [run],
-        })
-        AGENTLOOP.write_control_snapshot(root, parent)
+        assert rejected_checkpoint.returncode != 0 and "parent scope" in rejected_checkpoint.stderr
+        assert call(
+            root, "integration-transition", composite_id, "ready_for_verification",
+            "--actor", "coordinator", "--reason", "集成依赖已就绪",
+        ).returncode == 0
+        assert call(
+            root, "integration-transition", composite_id, "verifying",
+            "--actor", "verify", "--reason", "执行声明的集成 Flow",
+        ).returncode == 0
+        integration_evidence = call(
+            root, "evidence", composite_id,
+            "--flow-id", "integration-command",
+            "--acceptance-id", "AC-INTEGRATION",
+            "--executor", "command",
+            "--command-json", '["python3","tests/integration_report.py"]',
+            "--report-path", "artifacts/integration-report.json",
+        )
+        assert integration_evidence.returncode == 0, integration_evidence.stderr
         checkpoint = call(
             root, "integration-checkpoint", composite_id,
             "--actor", "coordinator", "--reason", "当前集成回归通过",
-            "--evidence", run["evidence_id"], "--git-commit", head,
+            "--evidence", integration_evidence.stdout.strip(), "--git-commit", head,
         )
         assert checkpoint.returncode == 0, checkpoint.stderr
         checkpointed = yaml.safe_load(composite_path.read_text())
         assert checkpointed["git"]["integration"]["head_commit"] == head
         assert checkpointed["git"]["integration"]["delivery_commit"] == head
         assert checkpointed["integration_verification"]["handoff"]["code_commit"] == head
-        resumed = call(
-            root, "transition", composite_id, "orchestrating",
-            "--actor", "coordinator", "--reason", "checkpoint 已完成",
-        )
-        assert resumed.returncode == 0, resumed.stderr
         aggregated = call(
             root, "transition", composite_id, "verified",
             "--actor", "coordinator", "--reason", "聚合子流程 Evidence",

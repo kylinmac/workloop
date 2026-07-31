@@ -145,6 +145,12 @@ the execution profile and invalidates `self_check`.
 New Loops use classification control v2. Before requirement confirmation,
 record the selected type's complete `classification.obligations`, each with a
 stable ID and independent source, plus `execution_profile.qualifications`.
+Record every executable requirement in `acceptance_obligations` with a stable
+`acceptance_id`. Before verification, map each required ID to implementation
+paths and exactly one flow/check identity with executor and scope. Evidence
+must carry the IDs it actually covers; `verified` requires the complete set.
+Run `migrate-v2` for an active legacy Loop; migration returns it to
+`clarifying` and stales legacy Evidence.
 Before coding, non-trivial non-prototype work completes
 `development-assurance.yaml`; each route obligation maps back to classification
 obligations, real artifact paths, checks, required Gates, and recovery.
@@ -220,8 +226,11 @@ write, worktree creation, merge, rollback, or delivery.
   parent integration branch. Rerun each delivery's targeted/flow checks on the
   integration head.
 - Record a tested integration head with `integration-checkpoint`, referencing
-  only current-requirement active passed Evidence on the current Git HEAD. The
-  command atomically updates the integration head/delivery checkpoint and
+  only current-requirement, parent-scope active passed Evidence on the current
+  Git HEAD. When integration verification is required, advance its nested
+  state with `integration-transition` to `ready_for_verification` and then
+  `verifying`; checkpoint accepts only the exact declared Flow/executor set.
+  The command atomically updates the integration head/delivery checkpoint and
   integration verification handoff; never edit those fields directly.
 - If integration verification is required, run it on that same exact
   integration commit. If not required, the merge and post-merge checks are
@@ -335,3 +344,6 @@ python3 <plugin-root>/scripts/agentloop.py validate
 
 `done` means the development AgentLoop is complete; it does not mean the result
 was released to production.
+
+The plugin vendors its YAML runtime and has a stdlib schema-validation fallback,
+so hooks and CLI commands do not depend on host-installed Python packages.

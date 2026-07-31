@@ -7,6 +7,12 @@ execution_profile:
   level: trivial
   status: confirmed
   reason: 单一文案变化且有直接检查
+  qualifications:
+    single_delivery_unit: true
+    scope_known: true
+    low_risk: true
+    directly_observable: true
+    concurrent_work: false
 state: done
 requirement_version: 1
 updated_at: "2026-07-30T10:10:00+08:00"
@@ -16,8 +22,24 @@ owners:
   development: development-agent
   verification: development-agent
 classification:
+  control_version: 2
   primary_type: 修改现有行为
   tags: []
+  basis: 已有文案行为发生小范围调整
+  obligations:
+    - {obligation_id: REQ-01, kind: current-behavior, requirement: 当前文案可定位, source: work.md, status: confirmed}
+    - {obligation_id: REQ-02, kind: target-behavior, requirement: 目标文案明确, source: work.md, status: confirmed}
+    - {obligation_id: REQ-03, kind: difference, requirement: 只改变指定文本, source: work.md, status: confirmed}
+    - {obligation_id: REQ-04, kind: reason, requirement: 修正错误表达, source: work.md, status: confirmed}
+    - {obligation_id: REQ-05, kind: invariants, requirement: 相邻文案保持不变, source: work.md, status: confirmed}
+    - {obligation_id: REQ-06, kind: compatibility, requirement: 不改变接口与状态, source: work.md, status: confirmed}
+acceptance_obligations:
+  - acceptance_id: AC-01
+    criterion: 指定文案等于目标文本且相邻内容不变
+    source: work.md
+    required: true
+    implementation_paths: [src/copy.ts]
+    verification: {flow_id: null, check_id: copy-self-check, executor: command, subflow_id: null}
 scope:
   claim: released
   claimed_at: "2026-07-30T10:00:00+08:00"

@@ -122,3 +122,13 @@ git diff --check
 ## 需求版本 7 补充：澄清分类门禁死锁
 
 根因是仓库级校验会遍历所有 Loop：新建 Loop 的 `draft/clarifying` 已被放行，但澄清前取消的旧 Loop 仍以 `primary_type: 待确认` 触发分类完整性检查，从而污染新 Loop。共享语义校验现按确认阶段判断：`draft/clarifying`、澄清前 blocked 和 cancelled 允许待确认；进入 `awaiting_requirement_confirmation` 仍失败关闭。回归覆盖“旧 Loop 取消 → 新 composite 初始化 → draft/clarifying 校验 → 未确认时尝试进入 Gate”完整路径。
+
+## 需求版本 7 补充：控制面生产闭环加固
+
+- 验收闭环：新增结构化 `acceptance_obligations`，每项绑定实现路径和唯一 flow/check 身份；Evidence 必须携带实际覆盖 ID，verified、子流程 passed 和父级聚合计算集合差。
+- v2：活动 v1 不再静默运行，`migrate-v2` 退回 clarifying 并失效旧 Evidence；四档样例全部升级为完整 v2。
+- 集成：增加 nested `integration-transition` 状态序；checkpoint 拒绝子流程 scope 和任意 check，只消费声明 Flow/executor 全集。
+- 控制：快照 v3 分阶段覆盖需求、开发和集成决策；route 限定在 ready/preparing。
+- 运行时：插件内置 PyYAML 纯 Python 包和标准库 Schema fallback；Hook 固定 PLUGIN_ROOT；runtime-upgrade staging 校验后切换并支持中断备份恢复。
+
+失败回归分别覆盖：单条 Evidence 缺一项验收、v1 活动 Loop、切片 Evidence 冒充集成、developing 篡改档位及重路由、两个缓存版本竞争、系统 Python 无依赖启动、升级备份中断恢复。
