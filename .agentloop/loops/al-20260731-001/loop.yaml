@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: developing
+state: verified
 requirement_version: 1
-updated_at: '2026-07-31T18:35:13+08:00'
+updated_at: '2026-07-31T18:36:07+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -273,7 +273,7 @@ integration_verification:
   verification_failure_roundtrips: 0
 verification_handoff:
   requirement_version: 1
-  code_commit: 1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a
+  code_commit: 11765a043adc3eb6017b82797c18a608fe89d962
   changed_files:
   - agentloop/examples/project.yaml
   - agentloop/schemas/project.schema.json
@@ -427,3 +427,33 @@ transitions:
   evidence:
   - .agentloop/loops/al-20260731-001/development-assurance.yaml
   reason: 进入旧历史兼容修正
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T18:35:48+08:00'
+  requirement_version: 1
+  git_commit: 11765a043adc3eb6017b82797c18a608fe89d962
+  evidence:
+  - .agentloop/loops/al-20260731-001/development.md
+  reason: 旧终态只读兼容与 Gate 认证修复完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T18:35:48+08:00'
+  requirement_version: 1
+  git_commit: 11765a043adc3eb6017b82797c18a608fe89d962
+  evidence:
+  - .agentloop/loops/al-20260731-001/development.md
+  reason: 对最终兼容提交执行完整 Gate 回归
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T18:36:07+08:00'
+  requirement_version: 1
+  git_commit: 11765a043adc3eb6017b82797c18a608fe89d962
+  evidence:
+  - al-20260731-001-evidence-02
+  reason: 最终 Gate 认证与旧历史兼容回归通过
