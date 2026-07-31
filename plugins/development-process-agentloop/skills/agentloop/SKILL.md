@@ -186,10 +186,13 @@ Visual and business Gates are independent.
 ## Gates
 
 Never infer approval from silence. Ask in the current Codex conversation and
-import the resulting authenticated host event before proceeding. With the
-default `host_hmac` policy the host injects `AGENTLOOP_GATE_EVENT_SECRET` and
-provides the matching event signature; an Agent must never create or expose
-that secret:
+record the resulting event before proceeding. Current Codex local plugins use
+`local_attestation` for ordinary requirement, routing, and completion Gates by
+default: bind the actual message provenance, requirement version, and subject
+digest, and never describe that record as cryptographic proof of human identity.
+Projects with a real Gate adapter may explicitly select `host_hmac`; the host
+then injects `AGENTLOOP_GATE_EVENT_SECRET` and provides the matching event
+signature, which an Agent must never create or expose:
 
 ```bash
 python3 <plugin-root>/scripts/agentloop.py gate <loop-id> <gate-id> \
@@ -209,6 +212,12 @@ repository bootstrap are always manual.
 not describe it as a machine-enforced human Gate. Gate commands are valid only
 in the state that owns the Gate, and every consuming transition recomputes the
 approved subject digest.
+
+`destructive_action` uses `destructive_event_authentication`, defaulting to
+`host_hmac` even when ordinary Gates use local attestation. For an existing
+project stuck on an unavailable ordinary HMAC Gate, run `doctor`, then
+`approval-mode --manual local_attestation`; this explicit command does not
+change destructive-action authentication.
 
 ## Git and concurrency
 

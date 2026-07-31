@@ -149,6 +149,10 @@ def main() -> None:
 
         loop_id = run(root, "init", "--title", "修正文案", "--level", "trivial")
         run(root, "validate")
+        project_path = root / ".agentloop" / "project.yaml"
+        project = yaml.safe_load(project_path.read_text())
+        assert project["approval"]["manual_event_authentication"] == "local_attestation"
+        assert project["approval"]["destructive_event_authentication"] == "host_hmac"
         loop_path = root / ".agentloop" / "loops" / loop_id / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
         assert loop["state"] == "draft"
@@ -179,6 +183,23 @@ def main() -> None:
             "--reason",
             "已记录原始需求",
         )
+        requirement_patch = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "hook", "pre-tool"],
+            input=json.dumps({
+                "cwd": str(root),
+                "tool_input": {
+                    "command": (
+                        "*** Begin Patch\n"
+                        f"*** Update File: {root / '.agentloop' / 'loops' / loop_id / 'work.md'}\n"
+                        "@@\n-old\n+new\n"
+                        "*** End Patch\n"
+                    )
+                },
+            }),
+            text=True,
+            capture_output=True,
+        )
+        assert '"permissionDecision": "deny"' not in requirement_patch.stdout, requirement_patch.stdout
         loop = yaml.safe_load(loop_path.read_text())
         loop["execution_profile"]["status"] = "confirmed"
         loop["execution_profile"]["reason"] = "单一文案变更且可直接观察"
@@ -235,6 +256,15 @@ def main() -> None:
             "--reason",
             "事实、范围和验收已核对",
         )
+        run(root, "approval-mode", "--manual", "host_hmac")
+        doctor = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "doctor"],
+            text=True,
+            capture_output=True,
+            check=True,
+            env={key: value for key, value in os.environ.items() if key != "AGENTLOOP_GATE_EVENT_SECRET"},
+        )
+        assert "approval-mode --manual local_attestation" in doctor.stdout
         forged = subprocess.run(
             [
                 "python3", str(ENGINE), "--root", str(root), "gate", loop_id,
@@ -247,20 +277,30 @@ def main() -> None:
             env={**os.environ, "AGENTLOOP_GATE_EVENT_SECRET": "agentloop-test-secret"},
         )
         assert forged.returncode != 0 and "signature is invalid" in forged.stderr
-        run(
-            root,
-            "gate",
-            loop_id,
-            "requirement_confirmation",
-            "--decision",
-            "approved",
-            "--actor",
-            "test-user",
-            "--source",
-            "test-host",
-            "--source-event-id",
-            "turn-001",
+        destructive = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "gate", loop_id,
+                "destructive_action", "--decision", "approved",
+                "--actor", "test-user", "--source", "test-host",
+                "--source-event-id", "destructive-001",
+            ],
+            text=True,
+            capture_output=True,
+            env={key: value for key, value in os.environ.items() if key != "AGENTLOOP_GATE_EVENT_SECRET"},
         )
+        assert destructive.returncode != 0 and "host-injected" in destructive.stderr
+        run(root, "approval-mode", "--manual", "local_attestation")
+        local_gate = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "gate", loop_id,
+                "requirement_confirmation", "--decision", "approved",
+                "--actor", "test-user", "--source", "codex-chat-local-attestation",
+                "--source-event-id", "turn-001",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert local_gate.returncode == 0, local_gate.stderr
         work_path = root / ".agentloop" / "loops" / loop_id / "work.md"
         approved_work = work_path.read_text()
         work_path.write_text(approved_work + "\nchanged after approval\n")

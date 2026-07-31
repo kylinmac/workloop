@@ -15,6 +15,7 @@
       "required": ["requirement_confirmation", "routing_confirmation", "completion", "destructive_actions"],
       "properties": {
         "manual_event_authentication": {"enum": ["host_hmac", "local_attestation"]},
+        "destructive_event_authentication": {"enum": ["host_hmac", "local_attestation"]},
         "requirement_confirmation": {
           "type": "object",
           "required": ["mode", "minimum_confidence", "forbidden_tags"],

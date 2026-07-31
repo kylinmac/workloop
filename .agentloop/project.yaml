@@ -17,6 +17,7 @@ approval:
     mode: human_acceptance
   destructive_actions:
     mode: always_manual
+  destructive_event_authentication: host_hmac
 verification_policy:
   defaults:
     trivial: self_check

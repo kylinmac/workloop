@@ -2,7 +2,8 @@ schema_version: 1
 project_id: example-project
 project_root: .
 approval:
-  manual_event_authentication: host_hmac
+  manual_event_authentication: local_attestation
+  destructive_event_authentication: host_hmac
   requirement_confirmation:
     mode: manual
     minimum_confidence: high

@@ -1,0 +1,27 @@
+schema_version: 1
+loop_id: al-20260731-001
+requirement_version: 1
+route: root-cause
+obligations:
+  - obligation_id: reproduction
+    scope_id: null
+    source_obligation_ids: [IMP-baseline, IMP-target]
+    artifact_paths:
+      - .agentloop/loops/al-20260731-001/development.md
+      - plugins/development-process-agentloop/scripts/test_agentloop.py
+    checks:
+      - host_hmac 在没有 AGENTLOOP_GATE_EVENT_SECRET 时拒绝普通 Gate
+    gate_ids: []
+    recovery: 无法复现时回到 development_preparing 检查项目认证配置和环境变量
+  - obligation_id: failing-regression
+    scope_id: null
+    source_obligation_ids: [IMP-metric, IMP-invariants, IMP-scope]
+    artifact_paths:
+      - plugins/development-process-agentloop/scripts/test_agentloop.py
+    checks:
+      - 新项目普通 Gate 使用 local_attestation 通过
+      - 显式 host_hmac 缺少签名时失败
+      - destructive_action 在 local_attestation 项目中仍要求 host_hmac
+      - 旧项目可通过配置命令切换
+    gate_ids: []
+    recovery: 任一安全负向用例失败时保持 developing 并修复共享认证选择逻辑

@@ -2264,6 +2264,13 @@ def gate_event_signature(
     return hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
 
+def gate_authentication(project: dict, gate_id: str) -> str:
+    approval = project["approval"]
+    if gate_id == "destructive_action":
+        return approval.get("destructive_event_authentication", "host_hmac")
+    return approval.get("manual_event_authentication", "local_attestation")
+
+
 def recover_prototype_rejection(root: Path, loop: dict, args: argparse.Namespace) -> None:
     if (
         args.gate_id != "completion"
@@ -2375,9 +2382,7 @@ def cmd_gate(args: argparse.Namespace) -> None:
         args.subject = [str(loop_dir(root, args.loop_id).joinpath(filename).relative_to(root))]
     subjects, digest = manifest_digest(root, args.subject)
     project = load_yaml(root / ".agentloop" / "project.yaml")
-    authentication = project["approval"].get(
-        "manual_event_authentication", "host_hmac"
-    )
+    authentication = gate_authentication(project, args.gate_id)
     if args.decision == "approved" and authentication == "host_hmac":
         expected_signature = gate_event_signature(
             args, loop["requirement_version"], digest
@@ -2979,6 +2984,17 @@ def patch_paths(command: str) -> list[str]:
     return re.findall(r"(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$", command)
 
 
+def normalized_patch_path(root: Path, value: str) -> str:
+    path = Path(value)
+    if path.is_absolute():
+        try:
+            path = path.resolve().relative_to(root)
+        except ValueError:
+            return path.as_posix()
+    normalized = path.as_posix()
+    return normalized[2:] if normalized.startswith("./") else normalized
+
+
 def path_in_scope(path: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(path, pattern) or path.startswith(pattern.rstrip("*")) for pattern in patterns)
 
@@ -3014,7 +3030,7 @@ def cmd_hook(args: argparse.Namespace) -> None:
         return
     if args.event == "pre-tool":
         command = str(event.get("tool_input", {}).get("command", ""))
-        changed = patch_paths(command)
+        changed = [normalized_patch_path(root, path) for path in patch_paths(command)]
         if not changed:
             return
         protected_control = [
@@ -3046,6 +3062,19 @@ def cmd_hook(args: argparse.Namespace) -> None:
         if all(
             path.startswith(
                 ("agentloop/", "plugins/development-process-agentloop/")
+            )
+            for path in changed
+        ):
+            return
+        if all(
+            any(
+                loop["state"] in {"draft", "clarifying"}
+                and path in {
+                    f".agentloop/loops/{loop['loop_id']}/loop.yaml",
+                    f".agentloop/loops/{loop['loop_id']}/{loop['files'].get('requirement')}",
+                    f".agentloop/loops/{loop['loop_id']}/{loop['files'].get('work')}",
+                }
+                for _, loop in loops
             )
             for path in changed
         ):
@@ -3104,7 +3133,29 @@ def cmd_hook(args: argparse.Namespace) -> None:
             )
 
 
-def cmd_doctor(_: argparse.Namespace) -> None:
+def cmd_approval_mode(args: argparse.Namespace) -> None:
+    if not args.manual and not args.destructive:
+        raise ValueError("approval-mode requires --manual or --destructive")
+    root = git_root(Path(args.root).resolve())
+    path = root / ".agentloop" / "project.yaml"
+    project = load_yaml(path)
+    if args.manual:
+        project["approval"]["manual_event_authentication"] = args.manual
+    if args.destructive:
+        project["approval"]["destructive_event_authentication"] = args.destructive
+    errors = list(schema_validator("project.schema.json").iter_errors(project))
+    if errors:
+        raise ValueError(
+            f"approval configuration invalid at {errors[0].json_path}: {errors[0].message}"
+        )
+    atomic_yaml(path, project)
+    print(
+        "ordinary=" + gate_authentication(project, "requirement_confirmation")
+        + " destructive=" + gate_authentication(project, "destructive_action")
+    )
+
+
+def cmd_doctor(args: argparse.Namespace) -> None:
     required = [
         PLUGIN_ROOT / ".codex-plugin" / "plugin.json",
         PLUGIN_ROOT / "skills" / "agentloop" / "SKILL.md",
@@ -3121,6 +3172,17 @@ def cmd_doctor(_: argparse.Namespace) -> None:
         "prototype-behavior-inventory", "development-assurance",
     ):
         schema_validator(f"{name}.schema.json")
+    project_path = Path(args.root).resolve() / ".agentloop" / "project.yaml"
+    if project_path.is_file():
+        project = load_yaml(project_path)
+        if (
+            gate_authentication(project, "requirement_confirmation") == "host_hmac"
+            and not os.environ.get("AGENTLOOP_GATE_EVENT_SECRET")
+        ):
+            print(
+                "warning: ordinary Gates use host_hmac but no host Gate adapter is available; "
+                "run `agentloop approval-mode --manual local_attestation` for Codex local use"
+            )
     print("passed: AgentLoop plugin assets and schemas")
 
 
@@ -3258,6 +3320,10 @@ def parser() -> argparse.ArgumentParser:
     hook = commands.add_parser("hook")
     hook.add_argument("event", choices=["session-start", "pre-tool", "stop"])
     hook.set_defaults(func=cmd_hook)
+    approval_mode = commands.add_parser("approval-mode")
+    approval_mode.add_argument("--manual", choices=["host_hmac", "local_attestation"])
+    approval_mode.add_argument("--destructive", choices=["host_hmac", "local_attestation"])
+    approval_mode.set_defaults(func=cmd_approval_mode)
     doctor = commands.add_parser("doctor")
     doctor.set_defaults(func=cmd_doctor)
     return value
