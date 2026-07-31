@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "78d9d713a1369f30a5df442648ad58f5cd2534fc02e94f4bca91856d68de028c",
+  "digest": "cf9416bc5efd94bc654cd2287e2ba5e740750853891f7dd83f16e5b74f507ea6",
   "payload": {
-    "state": "developing",
+    "state": "verified",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -26,7 +26,26 @@
       }
     },
     "subflows": {},
-    "evidence": {},
+    "evidence": {
+      "al-20260731-001-evidence-01": {
+        "flow_id": null,
+        "check_id": "gate-auth-regression",
+        "subflow_id": null,
+        "requirement_version": 1,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a",
+        "acceptance_ids": [
+          "AC-GATE-01",
+          "AC-GATE-02",
+          "AC-GATE-03",
+          "AC-GATE-04",
+          "AC-GATE-05"
+        ]
+      }
+    },
     "requirement_control": {
       "classification": {
         "control_version": 2,
@@ -219,6 +238,31 @@
           "executors": {}
         }
       }
+    },
+    "integration_control": {
+      "git_integration": {
+        "status": "pending",
+        "base_commit": "b5852ae4e62659678b87daf26c18ab98479d81c2",
+        "head_commit": null,
+        "merges": [],
+        "post_merge_checks": [],
+        "delivery_commit": null
+      },
+      "integration_verification": {
+        "required": false,
+        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
+        "decided_by": "loop-coordinator",
+        "decided_at": "2026-07-31T18:17:14+08:00",
+        "dependencies": [],
+        "state": "not_required",
+        "handoff": {},
+        "failure_handoff": {},
+        "reused_flows": [],
+        "new_flows": [],
+        "executors": {},
+        "verification_failure_roundtrips": 0
+      },
+      "child_loops": []
     }
   }
 }

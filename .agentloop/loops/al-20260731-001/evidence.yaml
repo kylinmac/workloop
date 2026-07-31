@@ -1,0 +1,34 @@
+schema_version: 1
+loop_id: al-20260731-001
+runs:
+- evidence_id: al-20260731-001-evidence-01
+  flow_id: null
+  check_id: gate-auth-regression
+  subflow_id: null
+  acceptance_ids:
+  - AC-GATE-01
+  - AC-GATE-02
+  - AC-GATE-03
+  - AC-GATE-04
+  - AC-GATE-05
+  requirement_version: 1
+  executor: command
+  command:
+  - /usr/bin/python3
+  - plugins/development-process-agentloop/scripts/test_agentloop.py
+  result: passed
+  exit_code: 0
+  counts:
+    passed: 1
+    failed: 0
+    skipped: 0
+  validity: active
+  code_commit: 1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a
+  environment: local-system-python
+  started_at: '2026-07-31T18:30:04+08:00'
+  ended_at: '2026-07-31T18:30:23+08:00'
+  duration_ms: 19124
+  stdout_path: null
+  stderr_path: null
+  coverage: []
+  artifacts: []

@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: developing
+state: verified
 requirement_version: 1
-updated_at: '2026-07-31T18:23:00+08:00'
+updated_at: '2026-07-31T18:30:32+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -254,7 +254,19 @@ integration_verification:
   new_flows: []
   executors: {}
   verification_failure_roundtrips: 0
-verification_handoff: null
+verification_handoff:
+  requirement_version: 1
+  code_commit: 1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a
+  changed_files:
+  - agentloop/examples/project.yaml
+  - agentloop/schemas/project.schema.json
+  - agentloop/产物与目录协议.md
+  - agentloop/issues/038-Codex宿主未接入HMAC导致人工Gate不可达.md
+  - agentloop/issues/039-需求阶段Hook阻止需求产物编辑.md
+  - plugins/development-process-agentloop/scripts/agentloop.py
+  - plugins/development-process-agentloop/scripts/test_agentloop.py
+  - plugins/development-process-agentloop/skills/agentloop/SKILL.md
+  check: /usr/bin/python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
 artifacts: []
 blocked: null
@@ -318,3 +330,33 @@ transitions:
   evidence:
   - .agentloop/loops/al-20260731-001/development-assurance.yaml
   reason: 根因复现、兼容策略、负向回归和恢复路径已准备
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T18:30:03+08:00'
+  requirement_version: 1
+  git_commit: 1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a
+  evidence:
+  - .agentloop/loops/al-20260731-001/development.md
+  reason: Gate 认证兼容、迁移、Hook 恢复与回归实现完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T18:30:03+08:00'
+  requirement_version: 1
+  git_commit: 1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a
+  evidence:
+  - .agentloop/loops/al-20260731-001/development.md
+  reason: 在当前提交执行 Gate 认证完整回归
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T18:30:32+08:00'
+  requirement_version: 1
+  git_commit: 1aaa5d7e711cfc8fbf7cd588007a7e1050e5b49a
+  evidence:
+  - al-20260731-001-evidence-01
+  reason: 五项 Gate 认证兼容验收义务在当前提交完整通过
