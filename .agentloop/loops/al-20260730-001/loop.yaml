@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: verified
+state: developing
 requirement_version: 6
-updated_at: '2026-07-31T12:14:06+08:00'
+updated_at: '2026-07-31T12:39:10+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -960,3 +960,50 @@ transitions:
   evidence:
   - al-20260730-001-evidence-09
   reason: 同行重复目标、完整插件生命周期和真实 299 行为唯一性均通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T12:39:10+08:00'
+  requirement_version: 6
+  git_commit: e9e87abe15d0bb6dc9effb48123fb9cf89eca704
+  evidence: []
+  reason: workflow 重试发现同范围旧 Evidence 未淘汰及 transition 接受不存在提交
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T12:39:10+08:00'
+  requirement_version: 6
+  git_commit: e9e87abe15d0bb6dc9effb48123fb9cf89eca704
+  evidence: []
+  reason: 两项均属于需求版本 6 的 Evidence 可信性与提交绑定验收范围
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T12:39:10+08:00'
+  requirement_version: 6
+  git_commit: e9e87abe15d0bb6dc9effb48123fb9cf89eca704
+  evidence: []
+  reason: 沿用已批准的需求版本 6
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:39:10+08:00'
+  requirement_version: 6
+  git_commit: e9e87abe15d0bb6dc9effb48123fb9cf89eca704
+  evidence: []
+  reason: 准备 Evidence 替代与 Git 对象校验修复
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T12:39:10+08:00'
+  requirement_version: 6
+  git_commit: e9e87abe15d0bb6dc9effb48123fb9cf89eca704
+  evidence:
+  - agentloop/issues/015-新Evidence未淘汰同范围旧记录.md
+  - agentloop/issues/016-Transition接受不存在的Git提交.md
+  reason: 新 Evidence 确定性淘汰同范围旧记录；transition 由 Git 解析并规范化提交

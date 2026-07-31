@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v1",
-  "digest": "46776b36cb21620c5b595fdcc9ef3727b004690ff0f2d8b7b3aebd63f2e62bda",
+  "digest": "dac7434188f8e3014ed9325868a38f0079668239a56ba3e83caeef8617a60a50",
   "payload": {
-    "state": "verified",
+    "state": "developing",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",

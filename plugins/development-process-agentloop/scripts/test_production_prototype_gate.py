@@ -229,6 +229,15 @@ def main() -> None:
             "--report-path", "artifacts/budget-report.json",
         )
         assert evidence.returncode == 0, evidence.stderr
+        replacement = call(
+            root, "evidence", loop_id, "--flow-id", "budget-production", "--executor", "ui",
+            "--command-json", '["python3","tests/budget_ui.py"]',
+            "--report-path", "artifacts/budget-report.json",
+        )
+        assert replacement.returncode == 0, replacement.stderr
+        runs = yaml.safe_load((loop_dir / "evidence.yaml").read_text())["runs"]
+        assert runs[-2]["validity"] == "stale"
+        assert runs[-1]["validity"] == "active"
         verified = call(root, "transition", loop_id, "verified", "--actor", "verify", "--reason", "业务与视觉独立通过")
         assert verified.returncode == 0, verified.stderr
 
@@ -266,6 +275,12 @@ def main() -> None:
         write_yaml(composite_path, parent)
         AGENTLOOP.write_control_snapshot(root, parent)
         subflow_id = parent["subflows"][0]["subflow_id"]
+        invalid_commit = call(
+            root, "transition", composite_id, "development_preparing",
+            "--subflow-id", subflow_id, "--actor", "coordinator", "--reason", "无效提交",
+            "--git-commit", "f" * 40,
+        )
+        assert invalid_commit.returncode != 0 and "does not exist" in invalid_commit.stderr
         moved = call(
             root, "transition", composite_id, "development_preparing",
             "--subflow-id", subflow_id, "--actor", "coordinator", "--reason", "子流程准备",

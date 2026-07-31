@@ -88,6 +88,14 @@ def run_git(root: Path, *args: str, check: bool = True) -> str:
     return result.stdout.strip()
 
 
+def resolve_git_commit(root: Path, value: str | None = None) -> str:
+    candidate = value or "HEAD"
+    try:
+        return run_git(root, "rev-parse", "--verify", f"{candidate}^{{commit}}")
+    except ValueError as error:
+        raise ValueError(f"Git commit does not exist: {candidate}") from error
+
+
 def git_root(start: Path) -> Path:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -1901,6 +1909,7 @@ def subflow_transition_errors(root: Path, loop: dict, subflow: dict, target: str
 def cmd_transition(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
+    git_commit = resolve_git_commit(root, args.git_commit)
     if args.subflow_id:
         subflow = next(
             (item for item in loop.get("subflows", []) if item["subflow_id"] == args.subflow_id),
@@ -1923,7 +1932,7 @@ def cmd_transition(args: argparse.Namespace) -> None:
                 "actor": args.actor,
                 "at": now(),
                 "requirement_version": loop["requirement_version"],
-                "git_commit": args.git_commit or run_git(root, "rev-parse", "HEAD"),
+                "git_commit": git_commit,
                 "evidence": args.evidence or [],
                 "reason": args.reason,
             })
@@ -1966,7 +1975,7 @@ def cmd_transition(args: argparse.Namespace) -> None:
                 "actor": args.actor,
                 "at": now(),
                 "requirement_version": loop["requirement_version"],
-                "git_commit": args.git_commit or run_git(root, "rev-parse", "HEAD"),
+                "git_commit": git_commit,
                 "evidence": args.evidence or [],
                 "reason": args.reason,
             }
@@ -2180,6 +2189,15 @@ def cmd_evidence(args: argparse.Namespace) -> None:
         for key in ("visual", "data_lineage", "business_function", "navigation"):
             if report.get(key) is not None:
                 run[key] = report[key]
+    for previous in evidence["runs"]:
+        if (
+            previous.get("validity") == "active"
+            and previous.get("requirement_version") == run["requirement_version"]
+            and previous.get("subflow_id") == run["subflow_id"]
+            and previous.get("flow_id") == run["flow_id"]
+            and previous.get("check_id") == run["check_id"]
+        ):
+            previous["validity"] = "stale"
     evidence["runs"].append(run)
     errors = list(schema_validator("evidence.schema.json").iter_errors(evidence))
     if errors:

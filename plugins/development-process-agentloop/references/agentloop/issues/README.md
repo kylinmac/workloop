@@ -20,3 +20,5 @@
 12. [集成验证 required 分支语义不一致](012-集成验证required分支语义不一致.md)
 13. [旧 Loop 升级时 completion 恢复死锁](013-旧Loop升级时completion恢复死锁.md)
 14. [同行重复行为产生重复 ID](014-同行重复行为产生重复ID.md)
+15. [新 Evidence 未淘汰同范围旧记录](015-新Evidence未淘汰同范围旧记录.md)
+16. [Transition 接受不存在的 Git 提交](016-Transition接受不存在的Git提交.md)
