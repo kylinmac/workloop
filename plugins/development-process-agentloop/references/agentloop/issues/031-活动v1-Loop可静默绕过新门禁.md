@@ -9,7 +9,7 @@
 ## 旧门禁为何没拦截
 Schema 和语义检查都接受 v1。
 ## 修复
-活动 v1 validate/推进失败；增加 `migrate-v2`，退回 clarifying、失效旧证据并补齐 v2 结构。终态历史只读保留。
+活动 v1 validate/推进失败；增加 `migrate-v2`，退回 clarifying、失效旧证据并补齐 v2 结构。终态历史只读保留；历史终态缺少后来新增的 `acceptance_obligations` 时仍可读取，但不能恢复执行。
 ## 回归
 v1 活动 Loop 校验失败，迁移后进入 clarifying 且生成空验收义务集合。
 ## 预防规则

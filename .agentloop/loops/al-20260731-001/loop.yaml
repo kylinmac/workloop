@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: verified
+state: developing
 requirement_version: 1
-updated_at: '2026-07-31T18:30:32+08:00'
+updated_at: '2026-07-31T18:35:13+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -144,7 +144,7 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-001
+    event_id: gate-002
     subject_digest: c515a2430d391c84d4a475ed0f78b16c632a5fd057594d6506220db29a7d1811
     confidence: medium
   routing_confirmation:
@@ -184,6 +184,23 @@ gate_events:
   reason: 用户明确要求改成当前 Codex 支持的确认方式
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-002
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: apple
+  source: codex-chat-local-attestation
+  source_event_id: user-message-20260731-supported-confirmation-compat
+  authentication: local_attestation
+  requirement_version: 1
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260731-001/requirement.md
+    sha256: f95a01fb3dc388733ef57241bbfe570a8ceff5953bb1420e440609c765ea24c1
+  artifact_digest: c515a2430d391c84d4a475ed0f78b16c632a5fd057594d6506220db29a7d1811
+  at: '2026-07-31T18:35:12+08:00'
+  reason: 用户已要求改为当前支持方式，旧项目兼容属于同一验收范围
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
@@ -204,17 +221,17 @@ git:
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T18:21:14+08:00'
+  decided_at: '2026-07-31T18:35:12+08:00'
   decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 根因是默认认证契约依赖当前宿主未提供的 HMAC 适配器
+    reason: 补齐旧终态 Schema 只读兼容
     supporting_flows: []
     required_outputs:
     - development-assurance
   verification:
     policy: targeted
-    reason: 覆盖默认本地确认、显式 HMAC 失败关闭、高风险 Gate 和旧项目迁移
+    reason: 重跑完整 Gate 回归并验证 workflow 运行时
     reused_flows: []
     new_flows: []
     executors: {}
@@ -360,3 +377,53 @@ transitions:
   evidence:
   - al-20260731-001-evidence-01
   reason: 五项 Gate 认证兼容验收义务在当前提交完整通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T18:35:12+08:00'
+  requirement_version: 1
+  git_commit: 2e849751a07f8a5af87e6886db113b0112994042
+  evidence:
+  - workflow runtime-upgrade validation
+  reason: 真实 workflow 运行时升级发现历史终态缺少后加字段，补齐只读兼容路径
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T18:35:12+08:00'
+  requirement_version: 1
+  git_commit: 2e849751a07f8a5af87e6886db113b0112994042
+  evidence:
+  - .agentloop/loops/al-20260731-001/requirement.md
+  reason: 兼容策略仍属于 AC-GATE-04，需求范围不变
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T18:35:12+08:00'
+  requirement_version: 1
+  git_commit: 2e849751a07f8a5af87e6886db113b0112994042
+  evidence:
+  - gate-002
+  reason: 需求兼容范围重新确认
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T18:35:13+08:00'
+  requirement_version: 1
+  git_commit: 2e849751a07f8a5af87e6886db113b0112994042
+  evidence:
+  - .agentloop/loops/al-20260731-001/development-assurance.yaml
+  reason: 复用既有 assurance 与验收映射
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T18:35:13+08:00'
+  requirement_version: 1
+  git_commit: 2e849751a07f8a5af87e6886db113b0112994042
+  evidence:
+  - .agentloop/loops/al-20260731-001/development-assurance.yaml
+  reason: 进入旧历史兼容修正

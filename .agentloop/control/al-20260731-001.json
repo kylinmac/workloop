@@ -1,12 +1,12 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "cf9416bc5efd94bc654cd2287e2ba5e740750853891f7dd83f16e5b74f507ea6",
+  "digest": "f1434bf9c39893fb4cfb1d5e01150ff39a00bdfc0a940976777c2390b1ddd359",
   "payload": {
-    "state": "verified",
+    "state": "developing",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
-        "event_id": "gate-001",
+        "event_id": "gate-002",
         "subject_digest": "c515a2430d391c84d4a475ed0f78b16c632a5fd057594d6506220db29a7d1811"
       },
       "routing_confirmation": {
@@ -220,11 +220,11 @@
       "routing": {
         "status": "decided",
         "confidence": "high",
-        "decided_at": "2026-07-31T18:21:14+08:00",
+        "decided_at": "2026-07-31T18:35:12+08:00",
         "decided_by": "development-agent",
         "development": {
           "main_flow": "root-cause",
-          "reason": "根因是默认认证契约依赖当前宿主未提供的 HMAC 适配器",
+          "reason": "补齐旧终态 Schema 只读兼容",
           "supporting_flows": [],
           "required_outputs": [
             "development-assurance"
@@ -232,37 +232,12 @@
         },
         "verification": {
           "policy": "targeted",
-          "reason": "覆盖默认本地确认、显式 HMAC 失败关闭、高风险 Gate 和旧项目迁移",
+          "reason": "重跑完整 Gate 回归并验证 workflow 运行时",
           "reused_flows": [],
           "new_flows": [],
           "executors": {}
         }
       }
-    },
-    "integration_control": {
-      "git_integration": {
-        "status": "pending",
-        "base_commit": "b5852ae4e62659678b87daf26c18ab98479d81c2",
-        "head_commit": null,
-        "merges": [],
-        "post_merge_checks": [],
-        "delivery_commit": null
-      },
-      "integration_verification": {
-        "required": false,
-        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
-        "decided_by": "loop-coordinator",
-        "decided_at": "2026-07-31T18:17:14+08:00",
-        "dependencies": [],
-        "state": "not_required",
-        "handoff": {},
-        "failure_handoff": {},
-        "reused_flows": [],
-        "new_flows": [],
-        "executors": {},
-        "verification_failure_roundtrips": 0
-      },
-      "child_loops": []
     }
   }
 }

@@ -234,12 +234,20 @@
   "allOf": [
     {
       "if": {
-        "properties": {
-          "classification": {
-            "properties": {"control_version": {"const": 2}},
-            "required": ["control_version"]
+        "allOf": [
+          {
+            "properties": {
+              "classification": {
+                "properties": {"control_version": {"const": 2}},
+                "required": ["control_version"]
+              }
+            }
+          },
+          {
+            "properties": {"state": {"not": {"enum": ["done", "cancelled"]}}},
+            "required": ["state"]
           }
-        }
+        ]
       },
       "then": {
         "required": ["acceptance_obligations"],

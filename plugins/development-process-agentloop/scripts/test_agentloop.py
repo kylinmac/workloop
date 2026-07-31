@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "vendor"))
 import yaml
+from schema_validation import Validator
 
 
 ENGINE = Path(__file__).with_name("agentloop.py")
@@ -483,6 +484,12 @@ def main() -> None:
             root, "transition", legacy, "cancelled",
             "--actor", "loop-coordinator", "--reason", "迁移回归完成",
         )
+        terminal_history = yaml.safe_load(legacy_path.read_text())
+        terminal_history.pop("acceptance_obligations")
+        loop_schema = json.loads(
+            (ENGINE.parents[1] / "references" / "agentloop" / "schemas" / "loop.schema.json").read_text()
+        )
+        assert not list(Validator(loop_schema).iter_errors(terminal_history))
 
         composite = run(
             root,
