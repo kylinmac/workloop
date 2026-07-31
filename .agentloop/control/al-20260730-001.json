@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "e23f8446df8de7b45946caf46d681b481ef33ab3ce3623f758af32b425427717",
+  "digest": "d826768ecc5ba360d48a04913e02afccb7c44b4696c07efc08aefc4f69a04bc7",
   "payload": {
-    "state": "verified",
+    "state": "blocked",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -427,36 +427,6 @@
           "executors": {}
         }
       }
-    },
-    "integration_control": {
-      "git_integration": {
-        "status": "verified",
-        "base_commit": "b74a61b5f0039c35ece34633557ed2a6bb83537e",
-        "head_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c",
-        "merges": [],
-        "post_merge_checks": [
-          {
-            "check": "full-plugin-regression",
-            "result": "passed"
-          }
-        ],
-        "delivery_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c"
-      },
-      "integration_verification": {
-        "required": false,
-        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
-        "decided_by": "loop-coordinator",
-        "decided_at": "2026-07-30T22:53:27+08:00",
-        "dependencies": [],
-        "state": "not_required",
-        "handoff": {},
-        "failure_handoff": {},
-        "reused_flows": [],
-        "new_flows": [],
-        "executors": {},
-        "verification_failure_roundtrips": 0
-      },
-      "child_loops": []
     }
   }
 }

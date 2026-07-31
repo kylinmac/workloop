@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: verified
+state: blocked
 requirement_version: 7
-updated_at: '2026-07-31T17:24:01+08:00'
+updated_at: '2026-07-31T17:25:27+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -379,7 +379,11 @@ verification_handoff:
   check: python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
 artifacts: []
-blocked: null
+blocked:
+  reason: 实现与验证已完成，等待用户明确批准 completion Gate
+  owner: codex
+  unblock_condition: 用户明确批准 completion Gate
+  resume_state: verified
 transitions:
 - from: null
   to: draft
@@ -1528,6 +1532,16 @@ transitions:
   evidence:
   - al-20260730-001-evidence-16
   reason: 安装缓存与系统 Python 回归闭环通过
+- from: verified
+  to: blocked
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:25:27+08:00'
+  requirement_version: 7
+  git_commit: 423cba0e5a3b1525e2b74f874c3eb4146d89739f
+  evidence:
+  - al-20260730-001-evidence-16
+  reason: 实现与验证已完成，等待用户明确批准 completion Gate
 acceptance_obligations:
 - acceptance_id: AC-CTRL-01
   criterion: 两个必需义务仅一个证据时 verified 失败，全部覆盖后通过
