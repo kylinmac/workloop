@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "442b0fc871dde9d965992cfd4ec08f2be071c157f75ba9c7448e2d9b1a59fe06",
+  "digest": "745d99cd1b2acca406ceaedaf8081d44941aa484ee049e57c860cee1d7024b27",
   "payload": {
-    "state": "developing",
+    "state": "verified",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -194,6 +194,24 @@
         "validity": "active",
         "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd",
         "acceptance_ids": null
+      },
+      "al-20260730-001-evidence-15": {
+        "flow_id": null,
+        "check_id": "control-hardening-regression",
+        "subflow_id": null,
+        "requirement_version": 7,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "fb939c4dad914182274a9a3a17999bfbce65ef0e",
+        "acceptance_ids": [
+          "AC-CTRL-01",
+          "AC-CTRL-02",
+          "AC-CTRL-03",
+          "AC-CTRL-04",
+          "AC-CTRL-05"
+        ]
       }
     },
     "requirement_control": {
@@ -391,6 +409,36 @@
           "executors": {}
         }
       }
+    },
+    "integration_control": {
+      "git_integration": {
+        "status": "verified",
+        "base_commit": "b74a61b5f0039c35ece34633557ed2a6bb83537e",
+        "head_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c",
+        "merges": [],
+        "post_merge_checks": [
+          {
+            "check": "full-plugin-regression",
+            "result": "passed"
+          }
+        ],
+        "delivery_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c"
+      },
+      "integration_verification": {
+        "required": false,
+        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
+        "decided_by": "loop-coordinator",
+        "decided_at": "2026-07-30T22:53:27+08:00",
+        "dependencies": [],
+        "state": "not_required",
+        "handoff": {},
+        "failure_handoff": {},
+        "reused_flows": [],
+        "new_flows": [],
+        "executors": {},
+        "verification_failure_roundtrips": 0
+      },
+      "child_loops": []
     }
   }
 }

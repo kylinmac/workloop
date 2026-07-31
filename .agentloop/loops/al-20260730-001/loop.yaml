@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: developing
+state: verified
 requirement_version: 7
-updated_at: '2026-07-31T17:02:46+08:00'
+updated_at: '2026-07-31T17:20:18+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -1401,6 +1401,36 @@ transitions:
   git_commit: 938ccd5d866b5b1da737b73322b4a2cb6b1485a7
   evidence: []
   reason: 根因、共享修复点和失败回归范围已明确
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:19:46+08:00'
+  requirement_version: 7
+  git_commit: fb939c4dad914182274a9a3a17999bfbce65ef0e
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 控制面加固实现与回归完成
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:19:46+08:00'
+  requirement_version: 7
+  git_commit: fb939c4dad914182274a9a3a17999bfbce65ef0e
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 执行当前提交绑定的控制面回归
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:20:18+08:00'
+  requirement_version: 7
+  git_commit: fb939c4dad914182274a9a3a17999bfbce65ef0e
+  evidence:
+  - al-20260730-001-evidence-15
+  reason: 五项控制面验收义务由当前提交回归证据完整覆盖
 acceptance_obligations:
 - acceptance_id: AC-CTRL-01
   criterion: 两个必需义务仅一个证据时 verified 失败，全部覆盖后通过
