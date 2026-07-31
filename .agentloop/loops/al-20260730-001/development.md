@@ -102,3 +102,9 @@ git diff --check
 ## 需求版本 5：实现方案
 
 增加 `integration-checkpoint` 控制命令：只使用当前 HEAD，并校验所引用 Evidence 均为当前需求版本、当前提交、active/passed；原子更新集成 head、delivery、checkpoint 与集成验证 handoff。父级原型验证复用同一 scope 过滤，聚合 passed 子流程在当前集成提交上的视觉覆盖和业务旅程，子流程自身验证规则保持不变。
+
+## 需求版本 6：实现方案
+
+新增 `prototype-behavior-inventory` Schema 与受控扫描命令，清单绑定原型文件 SHA-256，并把点击监听器、表单提交和导航目标作为独立候选。扩展 prototype matrix 的行为来源映射、旅程责任和导航 outcomes；编码前对 inventory → matrix → user-flow 做差集检查。UI 报告新增 navigation coverage，控制程序要求 `user_action`、来源路由和每个必需 outcome，并拒绝直接导航作为功能证据。
+
+新增 `agentloop/issues/`，每个缺陷一个文档，索引只负责导航。流程规则要求插件修复提交必须包含对应问题档案和回归命令。

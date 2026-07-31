@@ -1,13 +1,13 @@
 {
   "algorithm": "sha256-control-v1",
-  "digest": "eaeddab6751d4a328e6677648f4a61137e16844e8d67bfdf17e1c46bd8831e37",
+  "digest": "4ec471892d8069dbc7560e22cdca9b13e145a94082111ab371d8b35e4462500c",
   "payload": {
-    "state": "verified",
+    "state": "developing",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
-        "event_id": "gate-005",
-        "subject_digest": "dcb3b1c4fb014abecc505b0268f8ed41f476a24d9aba83c160f3f037baa9ecdb"
+        "event_id": "gate-006",
+        "subject_digest": "95800eb3e289b724ed89157c96ba56012d8890efbf774f9547f61da48f2e3661"
       },
       "routing_confirmation": {
         "status": "not_required",

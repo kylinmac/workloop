@@ -438,7 +438,166 @@ def load_prototype_matrix(root: Path, loop: dict) -> tuple[dict | None, list[str
             errors.append(
                 f"prototype page acceptance mapping is incomplete or unknown: {page['prototype_path']}"
             )
+    inventory, inventory_errors = load_prototype_behavior_inventory(root, loop)
+    errors.extend(inventory_errors)
+    if inventory is not None:
+        errors.extend(prototype_behavior_mapping_errors(root, loop, matrix, inventory))
     return matrix, errors
+
+
+def prototype_behavior_id(path: str, kind: str, event: str, line: int, target: str) -> str:
+    value = f"{path}\0{kind}\0{event}\0{line}\0{target}"
+    return f"behavior-{hashlib.sha256(value.encode()).hexdigest()[:16]}"
+
+
+def scan_prototype_behaviors(path: Path, relative_path: str) -> list[dict]:
+    patterns = (
+        ("event", re.compile(r"(.+?)\.addEventListener\(\s*['\"](click|submit|change|input)['\"]"), 2),
+        ("event", re.compile(r"\bon(click|submit|change|input)\s*="), 1),
+        ("navigation", re.compile(r"(?:window\.)?location(?:\.href)?\s*=\s*['\"]([^'\"]+)['\"]"), 1),
+        ("navigation", re.compile(r"<a\b[^>]*\bhref\s*=\s*['\"]([^'\"]+)['\"]"), 1),
+    )
+    found = []
+    for line_number, source in enumerate(path.read_text(errors="replace").splitlines(), 1):
+        for kind, pattern, group in patterns:
+            for match in pattern.finditer(source):
+                event = match.group(group) if kind == "event" else "navigation"
+                target = (
+                    match.group(1).strip()[-160:]
+                    if kind == "event"
+                    else match.group(group).strip()
+                )
+                found.append({
+                    "behavior_id": prototype_behavior_id(
+                        relative_path, kind, event, line_number, target
+                    ),
+                    "kind": kind,
+                    "event": event,
+                    "source_line": line_number,
+                    "target": target,
+                })
+    return found
+
+
+def load_prototype_behavior_inventory(root: Path, loop: dict) -> tuple[dict | None, list[str]]:
+    value = loop.get("files", {}).get("prototype_behavior_inventory")
+    if not value:
+        return None, ["files.prototype_behavior_inventory is required"]
+    path = loop_dir(root, loop["loop_id"]) / value
+    if not path.is_file():
+        return None, [f"prototype behavior inventory is missing: {path}"]
+    errors = validate_file(path, "prototype-behavior-inventory.schema.json")
+    if errors:
+        return None, errors
+    inventory = load_yaml(path)
+    if inventory["loop_id"] != loop["loop_id"]:
+        errors.append("prototype behavior inventory loop_id does not match Loop")
+    if inventory["requirement_version"] != loop["requirement_version"]:
+        errors.append("prototype behavior inventory requirement_version is stale")
+    declared = {page["prototype_path"] for page in loop["prototype"]["pages"]}
+    inventoried = {source["prototype_path"] for source in inventory["sources"]}
+    if declared != inventoried:
+        errors.append("prototype behavior inventory sources do not exactly match declared prototype pages")
+    behavior_ids = []
+    for source in inventory["sources"]:
+        prototype_path = project_file(root, source["prototype_path"])
+        if prototype_path is None or not prototype_path.is_file():
+            errors.append(f"prototype behavior source does not exist: {source['prototype_path']}")
+            continue
+        if hashlib.sha256(prototype_path.read_bytes()).hexdigest() != source["sha256"]:
+            errors.append(f"prototype behavior inventory source is stale: {source['prototype_path']}")
+        behavior_ids.extend(item["behavior_id"] for item in source["behaviors"])
+    if len(behavior_ids) != len(set(behavior_ids)):
+        errors.append("prototype behavior inventory contains duplicate behavior_id values")
+    return inventory, errors
+
+
+def prototype_behavior_mapping_errors(
+    root: Path,
+    loop: dict,
+    matrix: dict,
+    inventory: dict,
+) -> list[str]:
+    errors = []
+    inventory_behaviors = {
+        item["behavior_id"]: item
+        for source in inventory["sources"]
+        for item in source["behaviors"]
+    }
+    mapped: list[str] = []
+    required_journeys = set()
+    required_outcomes = set()
+    for page in matrix["pages"]:
+        for interaction in page["interactions"]:
+            interaction_id = interaction["interaction_id"]
+            source_ids = interaction.get("source_behavior_ids", [])
+            if not source_ids:
+                errors.append(f"prototype interaction {interaction_id}: source_behavior_ids is required")
+            if not isinstance(interaction.get("journey_required"), bool):
+                errors.append(f"prototype interaction {interaction_id}: journey_required is required")
+            if interaction.get("journey_required"):
+                required_journeys.add(interaction_id)
+            mapped.extend(source_ids)
+            unknown = set(source_ids) - set(inventory_behaviors)
+            if unknown:
+                errors.append(f"prototype interaction {interaction_id}: unknown source behaviors: {sorted(unknown)}")
+            navigation_ids = {
+                behavior_id for behavior_id in source_ids
+                if inventory_behaviors.get(behavior_id, {}).get("kind") == "navigation"
+            }
+            navigation = interaction.get("navigation")
+            if navigation_ids and not navigation:
+                errors.append(f"prototype interaction {interaction_id}: navigation declaration is required")
+                continue
+            if navigation:
+                if navigation.get("direct_entry_allowed"):
+                    errors.append(f"prototype interaction {interaction_id}: direct target entry cannot satisfy navigation")
+                outcome_ids = {
+                    item["source_behavior_id"] for item in navigation.get("outcomes", [])
+                }
+                if navigation_ids != outcome_ids:
+                    errors.append(
+                        f"prototype interaction {interaction_id}: navigation outcomes do not exactly map source navigation behaviors"
+                    )
+                required_outcomes.update(
+                    (interaction_id, item["outcome_id"])
+                    for item in navigation.get("outcomes", [])
+                )
+    missing = set(inventory_behaviors) - set(mapped)
+    duplicates = {item for item in mapped if mapped.count(item) > 1}
+    if missing:
+        errors.append(f"prototype behavior mapping is incomplete: {sorted(missing)}")
+    if duplicates:
+        errors.append(f"prototype behaviors are mapped more than once: {sorted(duplicates)}")
+    slices_value = loop.get("files", {}).get("user_flow_slices")
+    if not slices_value:
+        return errors
+    slices_path = loop_dir(root, loop["loop_id"]) / slices_value
+    if not slices_path.is_file():
+        return errors
+    try:
+        journeys = load_yaml(slices_path).get("journeys", [])
+        journey_interactions = {
+            interaction_id for journey in journeys
+            for interaction_id in journey.get("interaction_ids", [])
+        }
+        journey_outcomes = {
+            (interaction_id, outcome_id)
+            for journey in journeys
+            for interaction_id in journey.get("interaction_ids", [])
+            for outcome_id in journey.get("outcome_ids", [])
+        }
+        if required_journeys - journey_interactions:
+            errors.append(
+                f"user flow slices omit required prototype interactions: {sorted(required_journeys - journey_interactions)}"
+            )
+        if required_outcomes - journey_outcomes:
+            errors.append(
+                f"user flow slices omit required navigation outcomes: {sorted(required_outcomes - journey_outcomes)}"
+            )
+    except Exception:
+        pass
+    return errors
 
 
 def openapi_operation_ids(root: Path, values: list[str]) -> tuple[set[str], list[str]]:
@@ -599,6 +758,74 @@ def prototype_business_verification_errors(
         errors.append(f"business interaction evidence is incomplete: {sorted(missing)}")
     if not complete_journey:
         errors.append("no complete create/edit/save/refresh/relogin/query/downstream/audit journey evidence")
+    return errors
+
+
+def route_matches(expected: str, actual: str) -> bool:
+    pattern = re.escape(expected)
+    pattern = re.sub(r"\\\{[^{}]+\\\}", r"[^/?#]+", pattern)
+    return re.fullmatch(pattern, actual) is not None
+
+
+def prototype_navigation_verification_errors(
+    root: Path,
+    loop: dict,
+    subflow: dict | None = None,
+) -> list[str]:
+    if not prototype_is_required(loop, subflow):
+        return []
+    matrix, errors = load_prototype_matrix(root, loop)
+    if matrix is None:
+        return errors
+    subflow_id = subflow["subflow_id"] if subflow else None
+    expected = {
+        (interaction["interaction_id"], outcome["outcome_id"]): (
+            interaction["navigation"]["source_route"],
+            outcome["expected_target"],
+        )
+        for page in matrix["pages"]
+        if subflow_id is None or page.get("subflow_id") == subflow_id
+        for interaction in page["interactions"]
+        if interaction.get("navigation")
+        for outcome in interaction["navigation"]["outcomes"]
+    }
+    if not expected:
+        return errors
+    evidence_file = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_file) if evidence_file.is_file() else {"runs": []}
+    tested_commit = tested_commit_for_scope(loop, subflow_id)
+    scope_ids = evidence_scope_ids(loop, subflow_id)
+    covered = set()
+    for run in evidence.get("runs", []):
+        if (
+            run.get("subflow_id") not in scope_ids
+            or run.get("executor") != "ui"
+            or run.get("requirement_version") != loop["requirement_version"]
+            or run.get("validity") != "active"
+            or run.get("result") != "passed"
+            or (tested_commit and run.get("code_commit") != tested_commit)
+        ):
+            continue
+        for edge in run.get("navigation", {}).get("edges", []):
+            key = (edge["interaction_id"], edge["outcome_id"])
+            wanted = expected.get(key)
+            if not wanted:
+                continue
+            if edge["source_route"] != wanted[0]:
+                errors.append(f"navigation evidence {key}: source route differs from prototype matrix")
+                continue
+            if edge.get("action") != "user_action" or edge.get("direct_navigation") is not False:
+                errors.append(f"navigation evidence {key}: target was not reached by a real user action")
+                continue
+            if not route_matches(wanted[1], edge["observed_target"]):
+                errors.append(f"navigation evidence {key}: observed target differs from prototype matrix")
+                continue
+            errors.extend(evidence_path_errors(
+                root, edge["evidence_paths"], f"navigation evidence {key}"
+            ))
+            covered.add(key)
+    if expected.keys() - covered:
+        errors.append(f"navigation interaction evidence is incomplete: {sorted(expected.keys() - covered)}")
     return errors
 
 
@@ -819,6 +1046,7 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
         if loop.get("state") in {"verified", "done"}:
             errors.extend(prototype_verification_errors(root, loop, flows))
             errors.extend(prototype_business_verification_errors(root, loop))
+            errors.extend(prototype_navigation_verification_errors(root, loop))
             errors.extend(integration_data_verification_errors(root, loop, flows))
         for subflow in loop.get("subflows", []):
             if subflow.get("state") in {
@@ -829,6 +1057,7 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             if subflow.get("state") == "passed":
                 errors.extend(prototype_verification_errors(root, loop, flows, subflow))
                 errors.extend(prototype_business_verification_errors(root, loop, subflow))
+                errors.extend(prototype_navigation_verification_errors(root, loop, subflow))
     return errors
 
 
@@ -1274,6 +1503,47 @@ def cmd_status(args: argparse.Namespace) -> None:
         )
 
 
+def cmd_prototype_scan(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    if loop["state"] not in {"development_preparing", "orchestrating"}:
+        raise ValueError("prototype behavior inventory can only be generated before coding")
+    prototype = loop.get("prototype")
+    if not prototype:
+        raise ValueError("prototype declaration is required")
+    sources = []
+    for page in prototype.get("pages", []):
+        relative_path = page["prototype_path"]
+        source = project_file(root, relative_path)
+        if source is None or not source.is_file():
+            raise ValueError(f"prototype source does not exist: {relative_path}")
+        sources.append({
+            "prototype_path": relative_path,
+            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "behaviors": scan_prototype_behaviors(source, relative_path),
+        })
+    inventory = {
+        "schema_version": 1,
+        "loop_id": loop["loop_id"],
+        "requirement_version": loop["requirement_version"],
+        "scanner": "agentloop-static-v1",
+        "sources": sources,
+    }
+    errors = list(schema_validator("prototype-behavior-inventory.schema.json").iter_errors(inventory))
+    if errors:
+        raise ValueError(
+            f"prototype behavior inventory invalid at {errors[0].json_path}: {errors[0].message}"
+        )
+    value = "prototype-behavior-inventory.yaml"
+    loop["files"]["prototype_behavior_inventory"] = value
+    loop["updated_at"] = now()
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(loop_dir(root, args.loop_id) / value, inventory)
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+    print(loop_dir(root, args.loop_id) / value)
+
+
 def cmd_route(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
@@ -1295,10 +1565,16 @@ def cmd_route(args: argparse.Namespace) -> None:
             }
         )
         if args.main_flow == "product-prototype":
+            loop["files"]["prototype_behavior_inventory"] = "prototype-behavior-inventory.yaml"
             loop["files"]["prototype_matrix"] = "prototype-implementation-matrix.yaml"
             loop["files"]["user_flow_slices"] = "user-flow-slices.yaml"
             loop["files"]["api_contract"] = ["api/openapi.yaml"]
-            for output in ("prototype-implementation-matrix", "user-flow-slices", "api-contract"):
+            for output in (
+                "prototype-behavior-inventory",
+                "prototype-implementation-matrix",
+                "user-flow-slices",
+                "api-contract",
+            ):
                 if output not in loop["routing"]["development"]["required_outputs"]:
                     loop["routing"]["development"]["required_outputs"].append(output)
         loop["routing"]["verification"].update(
@@ -1506,6 +1782,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
             if subflow["state"] == "passed":
                 errors.extend(prototype_verification_errors(root, loop, flows, subflow))
                 errors.extend(prototype_business_verification_errors(root, loop, subflow))
+                errors.extend(prototype_navigation_verification_errors(root, loop, subflow))
     if loop["git"]["integration"]["status"] != "verified":
         errors.append("git.integration.status is not verified")
     integration = loop["integration_verification"]
@@ -1569,6 +1846,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
         if current == "verifying":
             errors.extend(prototype_verification_errors(root, loop, runtime_flows(root)))
             errors.extend(prototype_business_verification_errors(root, loop))
+            errors.extend(prototype_navigation_verification_errors(root, loop))
             errors.extend(integration_data_verification_errors(root, loop, runtime_flows(root)))
         elif current == "orchestrating":
             errors.extend(aggregation_errors(root, loop))
@@ -1597,6 +1875,7 @@ def subflow_transition_errors(root: Path, loop: dict, subflow: dict, target: str
     if target == "passed":
         errors.extend(prototype_verification_errors(root, loop, runtime_flows(root), subflow))
         errors.extend(prototype_business_verification_errors(root, loop, subflow))
+        errors.extend(prototype_navigation_verification_errors(root, loop, subflow))
     return errors
 
 
@@ -1752,6 +2031,7 @@ def cmd_integration_checkpoint(args: argparse.Namespace) -> None:
         flows = runtime_flows(root)
         errors.extend(prototype_verification_errors(root, loop, flows))
         errors.extend(prototype_business_verification_errors(root, loop))
+        errors.extend(prototype_navigation_verification_errors(root, loop))
     if errors:
         raise ValueError("; ".join(errors))
     loop["updated_at"] = now()
@@ -1878,7 +2158,7 @@ def cmd_evidence(args: argparse.Namespace) -> None:
             "executed_steps": report["executed_steps"],
             "skipped_required": report["skipped_required"],
         }
-        for key in ("visual", "data_lineage", "business_function"):
+        for key in ("visual", "data_lineage", "business_function", "navigation"):
             if report.get(key) is not None:
                 run[key] = report[key]
     evidence["runs"].append(run)
@@ -2004,7 +2284,10 @@ def cmd_doctor(_: argparse.Namespace) -> None:
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         raise ValueError("missing plugin assets: " + ", ".join(missing))
-    for name in ("project", "loop", "flow", "evidence", "prototype-matrix"):
+    for name in (
+        "project", "loop", "flow", "evidence", "prototype-matrix",
+        "prototype-behavior-inventory",
+    ):
         schema_validator(f"{name}.schema.json")
     print("passed: AgentLoop plugin assets and schemas")
 
@@ -2026,6 +2309,11 @@ def parser() -> argparse.ArgumentParser:
     validate.set_defaults(func=cmd_validate)
     status = commands.add_parser("status")
     status.set_defaults(func=cmd_status)
+
+    prototype_scan = commands.add_parser("prototype-scan")
+    prototype_scan.add_argument("loop_id")
+    prototype_scan.add_argument("--actor", required=True)
+    prototype_scan.set_defaults(func=cmd_prototype_scan)
 
     route = commands.add_parser("route")
     route.add_argument("loop_id")

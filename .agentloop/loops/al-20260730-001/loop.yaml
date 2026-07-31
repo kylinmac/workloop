@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: verified
-requirement_version: 5
-updated_at: '2026-07-31T10:41:29+08:00'
+state: developing
+requirement_version: 6
+updated_at: '2026-07-31T11:48:33+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -53,8 +53,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-005
-    subject_digest: dcb3b1c4fb014abecc505b0268f8ed41f476a24d9aba83c160f3f037baa9ecdb
+    event_id: gate-006
+    subject_digest: 95800eb3e289b724ed89157c96ba56012d8890efbf774f9547f61da48f2e3661
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -153,6 +153,22 @@ gate_events:
   reason: 用户提供真实 blocked 事故和两项修复要求
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-006
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-chat
+  source_event_id: user-prototype-interaction-inventory-issues-20260731
+  requirement_version: 6
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: 1cba56a67e93ae6ac52044df3c64480bef1cd4fabda283feadc58994ad7cb880
+  artifact_digest: 95800eb3e289b724ed89157c96ba56012d8890efbf774f9547f61da48f2e3661
+  at: '2026-07-31T11:48:32+08:00'
+  reason: 用户要求修改插件并补齐历史问题档案
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
@@ -190,18 +206,19 @@ git:
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T10:30:21+08:00'
+  decided_at: '2026-07-31T11:48:32+08:00'
   decided_by: development-agent
   development:
     main_flow: root-cause
-    reason: 缺少集成元数据控制入口且父级 Evidence scope 过滤只接受 subflow_id null
+    reason: 矩阵、旅程和 Evidence 共用同一缺失清单，缺少原型源独立覆盖基线
     supporting_flows: []
     required_outputs:
-    - integration-checkpoint
-    - composite-evidence-aggregation
+    - prototype-behavior-inventory
+    - navigation-causality-gate
+    - issue-archive
   verification:
     policy: targeted
-    reason: 覆盖 checkpoint 信任边界、父级聚合、跨版本和跨提交拒绝
+    reason: 覆盖行为漏项、分支漏项、直接 URL 绕过、真实点击通过及问题档案完整性
     reused_flows: []
     new_flows: []
     executors: {}
@@ -710,3 +727,49 @@ transitions:
   evidence:
   - al-20260730-001-evidence-06
   reason: 父级视觉 Gate 忽略非视觉 flow，完整插件回归通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T11:47:53+08:00'
+  requirement_version: 5
+  git_commit: b7162b23a79c5129e3cb7fc8f99578df359a37ce
+  evidence: []
+  reason: 修复原型交互闭世界覆盖与建立插件问题档案机制
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T11:48:32+08:00'
+  requirement_version: 6
+  git_commit: b7162b23a79c5129e3cb7fc8f99578df359a37ce
+  evidence: []
+  reason: 行为清单、导航 Evidence 与问题档案验收标准已明确
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T11:48:32+08:00'
+  requirement_version: 6
+  git_commit: b7162b23a79c5129e3cb7fc8f99578df359a37ce
+  evidence: []
+  reason: 需求版本 6 已确认
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T11:48:33+08:00'
+  requirement_version: 6
+  git_commit: b7162b23a79c5129e3cb7fc8f99578df359a37ce
+  evidence: []
+  reason: 开始准备独立原型行为基线和导航因果校验
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T11:48:33+08:00'
+  requirement_version: 6
+  git_commit: b7162b23a79c5129e3cb7fc8f99578df359a37ce
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: Schema、扫描命令、三层差集、导航 Evidence 和问题档案方案已完成

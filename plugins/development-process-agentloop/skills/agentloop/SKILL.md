@@ -138,10 +138,13 @@ the execution profile and invalidates `self_check`.
 Every new Loop explicitly records `prototype.implementation_basis`. When it is
 true, record prototype type, structure/visual/interaction/content fidelity,
 each prototype path and route, executable acceptance criteria, and justified
-deviations. `product-prototype` requires
-`prototype-implementation-matrix.yaml`; the control tool blocks development
-until every page, region, control, interaction, state, data source, permission,
-responsive rule, and deviation is complete.
+deviations. `product-prototype` requires a control-generated
+`prototype-behavior-inventory.yaml` before the
+`prototype-implementation-matrix.yaml`. Run `prototype-scan` while
+`development_preparing`; the control tool blocks development until every
+source behavior and navigation branch maps exactly once into the matrix and
+required user journeys, together with every page, region, control, state, data
+source, permission, responsive rule, and deviation.
 
 Every new or re-confirmed Loop also declares `integration_data`. Enable it only
 for frontend/backend features whose business display data should come from a
@@ -223,6 +226,13 @@ method, allowed differences, pass criteria, and coverage from prototype page
 through acceptance and automation step. Evidence records the same coverage
 rows plus per-page reference/implementation files. Missing rows block
 `passed`, `verified`, and parent aggregation.
+Navigation coverage starts at the declared source route and reaches every
+expected target through a browser user action. Directly opening the target URL
+is visual setup only and never satisfies interaction coverage.
+
+When fixing this plugin's protocol, schema, control program, packaging, or a
+Gate escape, read `references/rules/AgentLoop问题复盘规则.md` and add one indexed
+document per independent defect under `references/agentloop/issues/`.
 
 Record targeted/flow runs:
 

@@ -50,7 +50,11 @@ def main() -> None:
         loop = yaml.safe_load(loop_path.read_text())
         prototype_path = root / "design" / "budget.html"
         prototype_path.parent.mkdir()
-        prototype_path.write_text("<html><body>budget</body></html>")
+        prototype_path.write_text(
+            "<button id='save'>save</button><script>"
+            "document.getElementById('save').addEventListener('click',()=>saveBudget())"
+            "</script>"
+        )
         loop["state"] = "development_preparing"
         loop["execution_profile"]["status"] = "confirmed"
         loop["routing"]["status"] = "decided"
@@ -75,6 +79,12 @@ def main() -> None:
             }],
         }
         write_yaml(loop_path, loop)
+        AGENTLOOP.write_control_snapshot(root, loop)
+        scanned = call(root, "prototype-scan", loop_id, "--actor", "dev")
+        assert scanned.returncode == 0, scanned.stderr
+        inventory = yaml.safe_load(
+            (loop_dir / "prototype-behavior-inventory.yaml").read_text()
+        )
         interaction = {
             "interaction_id": "save-budget",
             "region_id": "main",
@@ -95,6 +105,10 @@ def main() -> None:
             "reuse_or_exemption": None,
             "state_change": "服务端预算持久化",
             "acceptance_ids": ["AC-BUDGET"],
+            "source_behavior_ids": [
+                item["behavior_id"] for item in inventory["sources"][0]["behaviors"]
+            ],
+            "journey_required": True,
         }
         write_yaml(loop_dir / "prototype-implementation-matrix.yaml", {
             "schema_version": 1,
@@ -285,6 +299,7 @@ def main() -> None:
         }
         parent["prototype"] = loop["prototype"]
         parent["files"].update({
+            "prototype_behavior_inventory": "prototype-behavior-inventory.yaml",
             "prototype_matrix": "prototype-implementation-matrix.yaml",
             "user_flow_slices": "user-flow-slices.yaml",
             "api_contract": ["api/openapi.yaml"],
@@ -302,6 +317,14 @@ def main() -> None:
         matrix["loop_id"] = composite_id
         matrix["pages"][0]["subflow_id"] = subflow_id
         write_yaml(composite_path.parent / "prototype-implementation-matrix.yaml", matrix)
+        inventory = yaml.safe_load(
+            (loop_dir / "prototype-behavior-inventory.yaml").read_text()
+        )
+        inventory["loop_id"] = composite_id
+        write_yaml(
+            composite_path.parent / "prototype-behavior-inventory.yaml",
+            inventory,
+        )
         write_yaml(
             composite_path.parent / "user-flow-slices.yaml",
             yaml.safe_load((loop_dir / "user-flow-slices.yaml").read_text()),

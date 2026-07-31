@@ -81,7 +81,39 @@
               "audit_assertion": {"type": "string", "minLength": 1},
               "reuse_or_exemption": {"type": ["string", "null"], "minLength": 1},
               "state_change": {"type": "string", "minLength": 1},
-              "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+              "acceptance_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+              "source_behavior_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "journey_required": {"type": "boolean"},
+              "navigation": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "required": ["source_route", "trigger", "direct_entry_allowed", "outcomes"],
+                "properties": {
+                  "source_route": {"type": "string", "minLength": 1},
+                  "trigger": {"enum": ["click", "submit"]},
+                  "direct_entry_allowed": {"type": "boolean"},
+                  "outcomes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["outcome_id", "source_behavior_id", "condition", "expected_target"],
+                      "properties": {
+                        "outcome_id": {"type": "string", "minLength": 1},
+                        "source_behavior_id": {"type": "string", "minLength": 1},
+                        "condition": {"type": "string", "minLength": 1},
+                        "expected_target": {"type": "string", "minLength": 1}
+                      }
+                    }
+                  }
+                }
+              }
             },
             "allOf": [
               {

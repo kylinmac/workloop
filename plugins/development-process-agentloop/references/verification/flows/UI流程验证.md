@@ -88,6 +88,8 @@ coverage:
 - 跳转和反馈
 - 加载、空、错误和无权限状态
 
+导航交互必须从矩阵声明的 `source_route` 开始，由浏览器点击或提交控件到达每个条件分支的 `expected_target`，并在报告的 `navigation.edges` 中保存交互 ID、分支 ID、观察到的目标和 trace/截图证据。`page.goto()`、地址栏输入或直接访问目标 URL 只能建立视觉页面基线，不能覆盖入口交互或用户旅程。
+
 前置数据可通过 API 或夹具准备，不要求全部通过 UI 创建。
 
 `automation.path` 必须指向项目内真实存在的测试或脚本文件。`.md` 只能作为报告写入 evidence 的 `stdout_path` 或 artifact，禁止作为 automation。控制程序同时检查路径未逃逸项目根、文件存在，并具有脚本/测试扩展名或可执行权限。
@@ -120,7 +122,7 @@ coverage:
 → flow automation step → evidence screenshot/artifact
 ```
 
-`evidence.runs[].coverage` 保存逐行映射，`visual` 保存实际视口、对比方式、允许差异、通过标准，以及每页参考和实现文件。控制程序按 `prototype-implementation-matrix` 计算必需行集合；任一页面、区域、关键交互、验收 ID、自动化步骤或证据缺失时不得标记 passed。范围为 01–09 时只验证两页，缺少的七页会形成覆盖错误。
+`evidence.runs[].coverage` 保存逐行映射，`visual` 保存实际视口、对比方式、允许差异、通过标准，以及每页参考和实现文件，`navigation.edges` 保存真实操作产生的路由边。控制程序按 `prototype-implementation-matrix` 计算必需行集合和导航分支集合；任一页面、区域、关键交互、验收 ID、导航分支、自动化步骤或证据缺失时不得标记 passed。范围为 01–09 时只验证两页，缺少的七页会形成覆盖错误。
 
 ## 完成条件
 

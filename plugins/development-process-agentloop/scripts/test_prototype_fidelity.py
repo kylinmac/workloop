@@ -36,7 +36,7 @@ def page(index: int) -> dict:
             "required_controls": [{"control_id": "open", "description": "打开详情"}],
         }],
         "interactions": [{
-            "interaction_id": "open-detail",
+            "interaction_id": f"open-detail-{index}",
             "region_id": "main",
             "control_id": "open",
             "effect": "client_only_exempt",
@@ -80,7 +80,7 @@ def flow_row(item: dict) -> dict:
         "prototype_path": item["prototype_path"],
         "route": item["route"],
         "region_id": "main",
-        "interaction_id": "open-detail",
+        "interaction_id": item["interactions"][0]["interaction_id"],
         "acceptance_id": item["interactions"][0]["acceptance_ids"][0],
         "automation_steps": [f"page-{item['route'][-1]}"],
     }
@@ -117,7 +117,11 @@ def main() -> None:
         for item in pages:
             path = root / item["prototype_path"]
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(f"<html><body>prototype {item['route']}</body></html>")
+            path.write_text(
+                f"<button id='open'>open</button><script>"
+                f"document.getElementById('open').addEventListener('click',()=>{{location.href='/detail-{item['route'][-1]}'}})"
+                f"</script>"
+            )
 
         loop["state"] = "development_preparing"
         loop["execution_profile"]["status"] = "confirmed"
@@ -149,14 +153,39 @@ def main() -> None:
             } for item in pages],
         }
         loop_path.write_text(yaml.safe_dump(loop, allow_unicode=True, sort_keys=False))
+        AGENTLOOP.write_control_snapshot(root, loop)
+        scanned = call(root, "prototype-scan", loop_id, "--actor", "development-agent")
+        assert scanned.returncode == 0, scanned.stderr
+        inventory = yaml.safe_load(
+            (loop_dir / "prototype-behavior-inventory.yaml").read_text()
+        )
+        for item, source in zip(pages, inventory["sources"]):
+            behavior_ids = [behavior["behavior_id"] for behavior in source["behaviors"]]
+            navigation_behavior = next(
+                behavior for behavior in source["behaviors"] if behavior["kind"] == "navigation"
+            )
+            interaction = item["interactions"][0]
+            interaction["source_behavior_ids"] = behavior_ids
+            interaction["journey_required"] = True
+            interaction["navigation"] = {
+                "source_route": item["route"],
+                "trigger": "click",
+                "direct_entry_allowed": False,
+                "outcomes": [{
+                    "outcome_id": f"open-detail-{item['route'][-1]}",
+                    "source_behavior_id": navigation_behavior["behavior_id"],
+                    "condition": "点击详情",
+                    "expected_target": f"/detail-{item['route'][-1]}",
+                }],
+            }
         (loop_dir / "user-flow-slices.yaml").write_text(yaml.safe_dump({
             "journeys": [{
                 "journey_id": "production-smoke",
                 "steps": ["create", "edit", "save", "refresh", "relogin", "query", "downstream", "audit"],
-                "interaction_ids": [],
+                "interaction_ids": [item["interactions"][0]["interaction_id"] for item in pages],
+                "outcome_ids": [f"open-detail-{index}" for index in range(1, 4)],
             }],
         }, allow_unicode=True, sort_keys=False))
-        AGENTLOOP.write_control_snapshot(root, loop)
         (loop_dir / "prototype-implementation-matrix.yaml").write_text(yaml.safe_dump({
             "schema_version": 1,
             "loop_id": loop_id,
@@ -168,6 +197,7 @@ def main() -> None:
             "--actor", "development-agent", "--reason", "矩阵不完整时不应编码",
         )
         assert rejected.returncode != 0
+        loop = yaml.safe_load(loop_path.read_text())
         loop["state"] = "verifying"
         loop_path.write_text(yaml.safe_dump(loop, allow_unicode=True, sort_keys=False))
         (loop_dir / "prototype-implementation-matrix.yaml").write_text(yaml.safe_dump({
@@ -231,6 +261,7 @@ def main() -> None:
         assert rejected.returncode != 0
         assert yaml.safe_load(loop_path.read_text())["state"] == "verifying"
 
+        standalone = yaml.safe_load(loop_path.read_text())
         composite = yaml.safe_load(loop_path.read_text())
         composite["state"] = "orchestrating"
         composite["execution_profile"]["level"] = "composite"
@@ -263,6 +294,7 @@ def main() -> None:
         )
         assert rejected.returncode != 0
 
+        loop = standalone
         loop["state"] = "verifying"
         loop_path.write_text(yaml.safe_dump(loop, allow_unicode=True, sort_keys=False))
         for item in matrix["pages"]:
@@ -282,6 +314,7 @@ def main() -> None:
         for index in range(1, 4):
             (artifacts / f"page-{index}-reference.png").write_text("reference")
             (artifacts / f"page-{index}-implementation.png").write_text("implementation")
+            (artifacts / f"page-{index}-navigation.json").write_text("{}")
         viewport = {"width": 1440, "height": 900}
         flow_path.write_text(yaml.safe_dump({
             "schema_version": 1,
@@ -326,6 +359,23 @@ def main() -> None:
             } for index, item in enumerate(pages, 1)],
             "result": "passed",
         }
+        run["navigation"] = {
+            "edges": [{
+                "interaction_id": item["interactions"][0]["interaction_id"],
+                "outcome_id": f"open-detail-{index}",
+                "source_route": item["route"],
+                "action": "user_action",
+                "direct_navigation": False,
+                "observed_target": f"/detail-{index}",
+                "evidence_paths": [f"artifacts/page-{index}-navigation.json"],
+            } for index, item in enumerate(pages, 1)]
+        }
+        run["navigation"]["edges"][0]["direct_navigation"] = True
+        (loop_dir / "evidence.yaml").write_text(
+            yaml.safe_dump(evidence, allow_unicode=True, sort_keys=False)
+        )
+        assert call(root, "validate").returncode != 0
+        run["navigation"]["edges"][0]["direct_navigation"] = False
         (loop_dir / "evidence.yaml").write_text(yaml.safe_dump(evidence, allow_unicode=True, sort_keys=False))
 
         passed = call(root, "validate")

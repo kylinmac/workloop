@@ -37,4 +37,13 @@ runs:
           reference_path: artifacts/dashboard-reference.png
           implementation_path: artifacts/dashboard-implementation.png
       result: passed
+    navigation:
+      edges:
+        - interaction_id: open-detail
+          outcome_id: open-dashboard-detail
+          source_route: /dashboard
+          action: user_action
+          direct_navigation: false
+          observed_target: /dashboard/detail
+          evidence_paths: [artifacts/dashboard-navigation-trace.json]
     artifacts: []

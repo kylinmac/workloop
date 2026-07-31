@@ -31,6 +31,17 @@ pages:
         reuse_or_exemption: 纯客户端路由，后端数据由详情页读取契约覆盖
         state_change: 跳转到 /dashboard/detail
         acceptance_ids: [AC-UI-01]
+        source_behavior_ids: [behavior-4e71ac04a25d88b1, behavior-287b042807b7a0b4]
+        journey_required: true
+        navigation:
+          source_route: /dashboard
+          trigger: click
+          direct_entry_allowed: false
+          outcomes:
+            - outcome_id: open-dashboard-detail
+              source_behavior_id: behavior-287b042807b7a0b4
+              condition: 用户点击查看详情
+              expected_target: /dashboard/detail
     states:
       loading: 显示骨架屏
       empty: 显示空数据说明

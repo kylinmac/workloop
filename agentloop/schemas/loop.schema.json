@@ -77,6 +77,7 @@
         "requirement": {"type": "string"},
         "development": {"type": "string"},
         "evidence": {"type": "string"},
+        "prototype_behavior_inventory": {"type": "string"},
         "prototype_matrix": {"type": "string"},
         "user_flow_slices": {"type": "string"},
         "api_contract": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
