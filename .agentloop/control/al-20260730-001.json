@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v2",
-  "digest": "acfc3e9222ed9ff7595de67c49b9e11c1967bc456594dd5b0903f2da985a03f0",
+  "digest": "3186061b1d02006215903ce93139358b5ffa5df1979e0f8796c8deb726c87f14",
   "payload": {
-    "state": "developing",
+    "state": "verified",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -147,6 +147,17 @@
         "exit_code": 0,
         "validity": "active",
         "code_commit": "5bb15e5452a58a3f1c4c74ec4c73c7bbd51b818c"
+      },
+      "al-20260730-001-evidence-12": {
+        "flow_id": null,
+        "check_id": "full-plugin-regression-v7-control-closure",
+        "subflow_id": null,
+        "requirement_version": 7,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "9ab804d9df33a7a530b8bebe382e820a69a67449"
       }
     }
   }

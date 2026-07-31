@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: developing
+state: verified
 requirement_version: 7
-updated_at: '2026-07-31T15:04:48+08:00'
+updated_at: '2026-07-31T15:09:38+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -1218,3 +1218,33 @@ transitions:
   evidence:
   - .agentloop/loops/al-20260730-001/development-assurance.yaml
   reason: 根因复现、失败回归、产物路径和恢复方案通过 assurance 门禁
+- from: developing
+  to: ready_for_verification
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T15:08:58+08:00'
+  requirement_version: 7
+  git_commit: 9ab804d9df33a7a530b8bebe382e820a69a67449
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 确认缺陷修复、协议同步、十一项问题档案和完整负向回归已提交
+- from: ready_for_verification
+  to: verifying
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T15:09:04+08:00'
+  requirement_version: 7
+  git_commit: 9ab804d9df33a7a530b8bebe382e820a69a67449
+  evidence:
+  - .agentloop/loops/al-20260730-001/development-assurance.yaml
+  reason: 接收快照、Gate、Evidence、分类、assurance、运行时升级和文档一致性回归
+- from: verifying
+  to: verified
+  subflow_id: null
+  actor: verification-agent
+  at: '2026-07-31T15:09:38+08:00'
+  requirement_version: 7
+  git_commit: 9ab804d9df33a7a530b8bebe382e820a69a67449
+  evidence:
+  - al-20260730-001-evidence-12
+  reason: 完整插件生命周期及所有新增负向、恢复、升级回归在提交 9ab804d 上通过
