@@ -241,6 +241,16 @@ def main() -> None:
         assert moved.returncode == 0, moved.stderr
         assert yaml.safe_load(composite_path.read_text())["state"] == "orchestrating"
         assert yaml.safe_load(composite_path.read_text())["subflows"][0]["state"] == "development_preparing"
+        parent = yaml.safe_load(composite_path.read_text())
+        parent["git"]["integration"]["delivery_commit"] = "c4e33a5"
+        parent["transitions"].extend([
+            {"subflow_id": subflow_id, "to": "verifying", "git_commit": "old-subflow"},
+            {"subflow_id": "sf-other", "to": "verifying", "git_commit": "other-subflow"},
+            {"subflow_id": subflow_id, "to": "verifying", "git_commit": "46804e8"},
+        ])
+        assert AGENTLOOP.tested_commit_for_scope(parent, subflow_id) == "46804e8"
+        assert AGENTLOOP.tested_commit_for_scope(parent, "sf-missing") is None
+        assert AGENTLOOP.tested_commit_for_scope(parent, None) == "c4e33a5"
 
     print("passed: production prototype and control gates")
 

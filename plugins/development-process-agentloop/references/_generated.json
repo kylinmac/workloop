@@ -21,7 +21,7 @@
     "agentloop/schemas/project.schema.json": "2be19bb40391130a21ee190a2bb383d1618e19ee857ee527a19b03d03eb1745f",
     "agentloop/schemas/prototype-matrix.schema.json": "f288bd3201ebe74fdb6d97706021dc6aad6fbd645f343807556cb0e2bc275aad",
     "agentloop/validate_examples.py": "031ecfdc44f21067715c8d7a4a5633a5b761b4e476923bac1a1706b33a250497",
-    "agentloop/产物与目录协议.md": "c8d91db308202c691e4ef58d73413f8cb1a37c2dca99fb84c016515cbbcb55e6",
+    "agentloop/产物与目录协议.md": "19614458c6f81d0b5c60f87084949daaa6863d2892d6fd4a7e1f2eb5d007e448",
     "agentloop/执行重试与恢复协议.md": "64b5d547dded9d41e53538c353fa3789b18faed480501866a54c5f9330d9623f",
     "agentloop/路由与阶段交接协议.md": "953421d8f964aef315cd5e0a73de11141398a4501b152da3ece6df53967ce776",
     "development/.DS_Store": "414dc2570a19e24e4e49983bb6c30cce3522d61fb47c126f8c40953d8250dff2",

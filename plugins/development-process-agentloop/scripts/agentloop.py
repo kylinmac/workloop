@@ -558,7 +558,9 @@ def prototype_business_verification_errors(
         return errors
     evidence_file = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
     evidence = load_yaml(evidence_file) if evidence_file.is_file() else {"runs": []}
-    tested_commit = loop.get("git", {}).get("integration", {}).get("delivery_commit") or loop.get("git", {}).get("head_commit")
+    tested_commit = tested_commit_for_scope(loop, subflow_id)
+    if subflow_id and not tested_commit:
+        errors.append(f"subflow {subflow_id}: no verifying transition commit")
     covered = set()
     complete_journey = False
     for run in evidence.get("runs", []):
@@ -597,6 +599,20 @@ def prototype_business_verification_errors(
     if not complete_journey:
         errors.append("no complete create/edit/save/refresh/relogin/query/downstream/audit journey evidence")
     return errors
+
+
+def tested_commit_for_scope(loop: dict, subflow_id: str | None) -> str | None:
+    if subflow_id:
+        for transition in reversed(loop.get("transitions", [])):
+            if (
+                transition.get("subflow_id") == subflow_id
+                and transition.get("to") == "verifying"
+                and transition.get("git_commit")
+            ):
+                return transition["git_commit"]
+        return None
+    integration = loop.get("git", {}).get("integration", {})
+    return integration.get("delivery_commit") or loop.get("git", {}).get("head_commit")
 
 
 def matrix_keys(matrix: dict, subflow_id: str | None = None) -> set[tuple[str, ...]]:
