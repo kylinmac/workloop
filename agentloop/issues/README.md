@@ -45,3 +45,4 @@
 37. [runtime-upgrade 可能留下混合资产](037-runtime-upgrade可能留下混合资产.md)
 38. [Codex 宿主未接入 HMAC 导致人工 Gate 不可达](038-Codex宿主未接入HMAC导致人工Gate不可达.md)
 39. [需求阶段 Hook 阻止需求产物编辑](039-需求阶段Hook阻止需求产物编辑.md)
+40. [单体 Skill 与全量 Loop 造成上下文膨胀](040-单体Skill与全量Loop造成上下文膨胀.md)

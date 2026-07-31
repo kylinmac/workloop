@@ -100,6 +100,35 @@ ROUTE_ASSURANCE_OBLIGATIONS = {
     "technical-validation": {"hypothesis", "thresholds", "experiment"},
 }
 
+STATE_PHASES = {
+    "draft": "requirements",
+    "clarifying": "requirements",
+    "awaiting_requirement_confirmation": "requirements",
+    "ready_for_development": "development",
+    "development_preparing": "development",
+    "developing": "development",
+    "ready_for_verification": "verification",
+    "verifying": "verification",
+    "orchestrating": "integration",
+    "verified": "completion",
+    "blocked": "recovery",
+}
+SUBFLOW_PHASES = {
+    "pending": "development",
+    "development_preparing": "development",
+    "developing": "development",
+    "ready_for_verification": "verification",
+    "verifying": "verification",
+    "passed": "integration",
+    "failed": "recovery",
+    "blocked": "recovery",
+    "skipped": "integration",
+}
+PHASE_SKILLS = {
+    phase: f"development-process-agentloop:agentloop-{phase}"
+    for phase in ("requirements", "development", "verification", "integration", "completion", "recovery")
+}
+
 
 def now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
@@ -2018,6 +2047,196 @@ def cmd_status(args: argparse.Namespace) -> None:
         )
 
 
+def evidence_context(root: Path, loop: dict, subflow_id: str | None = None) -> list[dict]:
+    path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(path) if path.is_file() else {"runs": []}
+    keys = (
+        "evidence_id", "flow_id", "check_id", "subflow_id", "executor", "result",
+        "validity", "code_commit", "assertion_count", "skipped_count", "acceptance_ids",
+    )
+    return [
+        {key: run.get(key) for key in keys if run.get(key) is not None}
+        for run in evidence.get("runs", [])
+        if run.get("requirement_version") == loop["requirement_version"]
+        and run.get("validity") == "active"
+        and (subflow_id is None or run.get("subflow_id") == subflow_id)
+    ]
+
+
+def git_context(loop: dict, *, integration: bool = False) -> dict:
+    git_value = loop.get("git", {})
+    keys = (
+        "target_branch", "branch", "worktree", "baseline_commit", "head_commit",
+        "last_checkpoint_commit",
+    )
+    result = {key: git_value.get(key) for key in keys if git_value.get(key) is not None}
+    if integration:
+        result["integration"] = git_value.get("integration", {})
+    return result
+
+
+def acceptance_context(loop: dict, subflow_id: str | None = None) -> list[dict]:
+    obligations = loop.get("acceptance_obligations", [])
+    if subflow_id is None:
+        return obligations
+    return [
+        item for item in obligations
+        if item.get("verification", {}).get("subflow_id") == subflow_id
+    ]
+
+
+def subflow_summary(item: dict) -> dict:
+    keys = (
+        "subflow_id", "title", "required", "state", "state_reason", "dependencies",
+        "acceptance_ids", "main_flow",
+    )
+    return {key: item.get(key) for key in keys if item.get(key) is not None}
+
+
+def subflow_context(item: dict) -> dict:
+    keys = (
+        "subflow_id", "title", "required", "state", "state_reason", "dependencies",
+        "acceptance_ids", "main_flow", "scope", "git", "verification",
+        "verification_handoff", "failure_handoff", "verification_failure_roundtrips",
+    )
+    return {key: item.get(key) for key in keys if item.get(key) is not None}
+
+
+def child_loop_summary(item: dict) -> dict:
+    keys = (
+        "loop_id", "required", "acceptance_ids", "deliverable", "dependencies",
+        "repository_id", "project_root", "loop_file", "loop_uri", "skip_reason",
+    )
+    return {key: item.get(key) for key in keys if item.get(key) is not None}
+
+
+def context_projection(root: Path, path: Path, loop: dict, subflow_id: str | None = None) -> dict:
+    subflow = None
+    if subflow_id is not None:
+        subflow = next(
+            (item for item in loop.get("subflows", []) if item.get("subflow_id") == subflow_id),
+            None,
+        )
+        if subflow is None:
+            raise ValueError(f"subflow not found: {subflow_id}")
+        phase = SUBFLOW_PHASES.get(subflow["state"])
+    else:
+        phase = STATE_PHASES.get(loop["state"])
+    if phase is None:
+        raise ValueError(f"no active phase for state: {loop['state']}")
+
+    result = {
+        "context_schema_version": 1,
+        "source": {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        },
+        "phase": phase,
+        "phase_skill": PHASE_SKILLS[phase],
+        "loop": {
+            "loop_id": loop["loop_id"],
+            "title": loop["title"],
+            "loop_kind": loop["loop_kind"],
+            "state": loop["state"],
+            "requirement_version": loop["requirement_version"],
+            "execution_profile": {
+                "level": loop["execution_profile"]["level"],
+                "status": loop["execution_profile"]["status"],
+            },
+        },
+    }
+    if subflow is not None:
+        result["focus"] = {"kind": "subflow", **subflow_context(subflow)}
+
+    acceptance = acceptance_context(loop, subflow_id)
+    if phase == "requirements":
+        result.update({
+            "classification": loop.get("classification"),
+            "acceptance_obligations": acceptance,
+            "prototype": loop.get("prototype"),
+            "integration_data": loop.get("integration_data"),
+            "scope": loop.get("scope"),
+            "gate": loop.get("gates", {}).get("requirement_confirmation"),
+            "files": {
+                key: value for key, value in loop.get("files", {}).items()
+                if key in {"requirement", "work"}
+            },
+        })
+    elif phase == "development":
+        result.update({
+            "acceptance_obligations": acceptance,
+            "routing": loop.get("routing"),
+            "scope": subflow.get("scope") if subflow else loop.get("scope"),
+            "prototype": loop.get("prototype"),
+            "integration_data": loop.get("integration_data"),
+            "files": loop.get("files"),
+            "git": subflow.get("git") if subflow else git_context(loop),
+        })
+    elif phase == "verification":
+        result.update({
+            "acceptance_obligations": acceptance,
+            "verification": subflow.get("verification") if subflow else loop.get("routing", {}).get("verification"),
+            "scope": subflow.get("scope") if subflow else loop.get("scope"),
+            "prototype": loop.get("prototype"),
+            "integration_data": loop.get("integration_data"),
+            "verification_handoff": subflow.get("verification_handoff") if subflow else loop.get("verification_handoff"),
+            "failure_handoff": subflow.get("failure_handoff") if subflow else loop.get("failure_handoff"),
+            "git": subflow.get("git") if subflow else git_context(loop),
+            "evidence": evidence_context(root, loop, subflow_id),
+        })
+    elif phase == "integration":
+        result.update({
+            "acceptance_obligations": acceptance,
+            "integration_verification": loop.get("integration_verification"),
+            "git": git_context(loop, integration=True),
+            "evidence": evidence_context(root, loop, subflow_id),
+        })
+        if subflow is None:
+            result["subflows"] = [subflow_summary(item) for item in loop.get("subflows", [])]
+            result["child_loops"] = [child_loop_summary(item) for item in loop.get("child_loops", [])]
+    elif phase == "completion":
+        result.update({
+            "acceptance_obligations": acceptance,
+            "gate": loop.get("gates", {}).get("completion"),
+            "git": git_context(loop, integration=bool(loop.get("subflows") or loop.get("child_loops"))),
+            "subflows": [
+                {key: item.get(key) for key in ("subflow_id", "required", "state", "acceptance_ids")}
+                for item in loop.get("subflows", [])
+            ],
+            "child_loops": [child_loop_summary(item) for item in loop.get("child_loops", [])],
+            "integration_verification": loop.get("integration_verification"),
+            "evidence": evidence_context(root, loop, subflow_id),
+        })
+    else:
+        resume_state = loop.get("blocked", {}).get("resume_state")
+        result.update({
+            "blocked": loop.get("blocked"),
+            "resume_phase": STATE_PHASES.get(resume_state),
+            "execution": loop.get("execution"),
+            "verification_control": loop.get("verification_control"),
+            "failure_handoff": subflow.get("failure_handoff") if subflow else loop.get("failure_handoff"),
+            "git": subflow.get("git") if subflow else git_context(loop),
+            "last_transition": loop.get("transitions", [])[-1] if loop.get("transitions") else None,
+        })
+    return result
+
+
+def cmd_context(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    if args.loop_id:
+        path, loop = load_loop(root, args.loop_id)
+    else:
+        loops = active_loops(root)
+        if len(loops) != 1:
+            raise ValueError(f"context requires a loop_id when {len(loops)} active Loops exist")
+        path, loop = loops[0]
+    value = context_projection(root, path, loop, args.subflow_id)
+    if args.format == "json":
+        print(json.dumps(value, ensure_ascii=False, indent=2))
+    else:
+        print(yaml.safe_dump(value, allow_unicode=True, sort_keys=False).rstrip())
+
+
 def cmd_prototype_scan(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
@@ -3024,8 +3243,9 @@ def cmd_hook(args: argparse.Namespace) -> None:
             )
             emit(
                 f"AgentLoop plugin found active Loops: {summary}. "
-                "Invoke $agentloop, load loop.yaml as the state source, and use "
-                f"`python3 {Path(__file__).resolve()} status` before acting."
+                "Invoke $agentloop and load only the current phase projection with "
+                f"`python3 {Path(__file__).resolve()} context <loop-id>` before acting. "
+                "Read full loop.yaml only for recovery or control diagnosis."
             )
         return
     if args.event == "pre-tool":
@@ -3203,6 +3423,11 @@ def parser() -> argparse.ArgumentParser:
     validate.set_defaults(func=cmd_validate)
     status = commands.add_parser("status")
     status.set_defaults(func=cmd_status)
+    context = commands.add_parser("context")
+    context.add_argument("loop_id", nargs="?")
+    context.add_argument("--subflow-id")
+    context.add_argument("--format", choices=["yaml", "json"], default="yaml")
+    context.set_defaults(func=cmd_context)
     runtime_upgrade = commands.add_parser("runtime-upgrade")
     runtime_upgrade.set_defaults(func=cmd_runtime_upgrade)
     migrate_v2 = commands.add_parser("migrate-v2")

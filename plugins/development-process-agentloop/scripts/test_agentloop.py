@@ -19,7 +19,9 @@ SYNC_REFERENCES = Path(__file__).with_name("sync_references.py")
 PROTOTYPE_FIDELITY_TEST = Path(__file__).with_name("test_prototype_fidelity.py")
 INTEGRATION_DATA_TEST = Path(__file__).with_name("test_integration_data_source.py")
 PRODUCTION_PROTOTYPE_TEST = Path(__file__).with_name("test_production_prototype_gate.py")
+CONTEXT_PROJECTION_TEST = Path(__file__).with_name("test_context_projection.py")
 HOOKS = ENGINE.parents[1] / "hooks" / "hooks.json"
+SKILLS = ENGINE.parents[1] / "skills"
 
 
 def run(root: Path, *args: str) -> str:
@@ -74,6 +76,7 @@ def git(root: Path, *args: str) -> None:
 
 def main() -> None:
     subprocess.run(["python3", str(SYNC_REFERENCES), "verify"], check=True)
+    subprocess.run(["python3", str(CONTEXT_PROJECTION_TEST)], check=True)
     system_python = Path("/usr/bin/python3")
     if system_python.exists():
         subprocess.run([str(system_python), str(ENGINE), "doctor"], check=True)
@@ -92,6 +95,13 @@ def main() -> None:
                 f"Path('hook-result').write_text({marker!r} + ':' + ' '.join(sys.argv[1:]))\n"
             )
         hook = json.loads(HOOKS.read_text())["hooks"]["Stop"][0]["hooks"][0]["command"]
+        session_hook = json.loads(HOOKS.read_text())["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+        assert "${PLUGIN_ROOT}/scripts/agentloop.py" in session_hook
+        router = (SKILLS / "agentloop" / "SKILL.md").read_text()
+        assert len(router.splitlines()) <= 80
+        for phase in ("requirements", "development", "verification", "integration", "completion", "recovery"):
+            phase_skill = (SKILLS / f"agentloop-{phase}" / "SKILL.md").read_text()
+            assert len(phase_skill.splitlines()) <= 60
         subprocess.run(
             hook.replace("${PLUGIN_ROOT}", str(old_root)),
             cwd=root,
@@ -157,6 +167,23 @@ def main() -> None:
         loop_path = root / ".agentloop" / "loops" / loop_id / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
         assert loop["state"] == "draft"
+        session_context = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "hook", "session-start"],
+            input=json.dumps({"cwd": str(root)}),
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+        assert " context <loop-id>" in session_context
+        assert "load loop.yaml" not in session_context
+        requirement_context_text = run(root, "context", loop_id)
+        requirement_context = yaml.safe_load(requirement_context_text)
+        assert requirement_context["phase"] == "requirements"
+        assert requirement_context["phase_skill"] == "development-process-agentloop:agentloop-requirements"
+        assert requirement_context["source"]["path"].endswith(f"{loop_id}/loop.yaml")
+        assert "classification" in requirement_context
+        assert not {"transitions", "gate_events", "git", "routing", "evidence"} & requirement_context.keys()
+        assert len(requirement_context_text) < len(loop_path.read_text()) * 0.7
         assert (root / ".agentloop" / "schemas" / "loop.schema.json").exists()
         snapshot_path = root / ".agentloop" / "control" / f"{loop_id}.json"
         saved_loop = loop_path.read_text()
@@ -363,6 +390,11 @@ def main() -> None:
             "--reason",
             "编码前检查通过",
         )
+        development_context = yaml.safe_load(run(root, "context", loop_id))
+        assert development_context["phase"] == "development"
+        assert development_context["phase_skill"] == "development-process-agentloop:agentloop-development"
+        assert "routing" in development_context and "git" in development_context
+        assert not {"classification", "transitions", "gate_events", "evidence", "blocked"} & development_context.keys()
         protected = yaml.safe_load(loop_path.read_text())
         protected["execution_profile"]["level"] = "composite"
         loop_path.write_text(yaml.safe_dump(protected, allow_unicode=True, sort_keys=False))
@@ -435,6 +467,11 @@ def main() -> None:
             "--evidence",
             "work.md#开发自检",
         )
+        completion_context = yaml.safe_load(run(root, "context", loop_id))
+        assert completion_context["phase"] == "completion"
+        assert completion_context["phase_skill"] == "development-process-agentloop:agentloop-completion"
+        assert completion_context["evidence"][0]["result"] == "passed"
+        assert not {"classification", "routing", "transitions", "gate_events", "execution"} & completion_context.keys()
         run(
             root,
             "gate",

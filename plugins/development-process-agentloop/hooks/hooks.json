@@ -8,7 +8,7 @@
             "type": "command",
             "command": "python3 \"${PLUGIN_ROOT}/scripts/agentloop.py\" hook session-start",
             "statusMessage": "Loading AgentLoop state",
-            "additionalContextLimit": 1200
+            "additionalContextLimit": 600
           }
         ]
       }
