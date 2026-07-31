@@ -234,6 +234,21 @@ def main() -> None:
         parent = yaml.safe_load(composite_path.read_text())
         parent["state"] = "orchestrating"
         parent["routing"]["status"] = "decided"
+        parent["routing"]["verification"]["new_flows"] = ["integration-command"]
+        write_yaml(root / ".agentloop" / "flows" / "integration-command.yaml", {
+            "schema_version": 1,
+            "flow_id": "integration-command",
+            "title": "非视觉集成检查",
+            "executor": "command",
+            "status": "active",
+            "covers": {
+                "paths": [], "interfaces": [], "routes": [],
+                "db_objects": [], "states": [], "tags": [],
+            },
+            "preconditions": [],
+            "steps": [{"step_id": "build", "action": "构建", "expect": "成功"}],
+            "checks": ["build"],
+        })
         write_yaml(composite_path, parent)
         AGENTLOOP.write_control_snapshot(root, parent)
         subflow_id = parent["subflows"][0]["subflow_id"]

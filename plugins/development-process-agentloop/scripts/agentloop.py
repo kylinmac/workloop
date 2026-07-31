@@ -695,13 +695,14 @@ def prototype_verification_errors(
             errors.append(f"prototype verification flow is missing: {flow_id}")
             continue
         selected.append(flow)
-        if requires_prototype and (flow.get("executor") != "ui" or not flow_requires_visual(flow)):
-            errors.append(f"prototype verification flow is not visual UI automation: {flow_id}")
         errors.extend(flow_semantic_errors(root, flow))
     visual_selected = [flow for flow in selected if flow_requires_visual(flow)]
-    if not requires_prototype and not visual_selected:
+    if requires_prototype and not visual_selected:
+        errors.append(f"{subflow_id or loop['loop_id']}: prototype verification flow is not selected")
         return errors
-    evidence_ids = ids if requires_prototype else {flow["flow_id"] for flow in visual_selected}
+    if not visual_selected:
+        return errors
+    evidence_ids = {flow["flow_id"] for flow in visual_selected}
     if requires_prototype:
         matrix, matrix_errors = load_prototype_matrix(root, loop)
         errors.extend(matrix_errors)
