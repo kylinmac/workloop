@@ -1230,7 +1230,12 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
         if loop.get("gates", {}).get("routing_confirmation", {}).get("status") == "approved":
             gate_ids.add("routing_confirmation")
         errors.extend(gate_subject_errors(root, loop, gate_ids))
-        if loop.get("state") not in {"draft", "clarifying"}:
+        state = loop.get("state")
+        classification_pending = state in {"draft", "clarifying", "cancelled"} or (
+            state == "blocked"
+            and loop.get("blocked", {}).get("resume_state") in {"draft", "clarifying"}
+        )
+        if not classification_pending:
             errors.extend(classification_errors(loop))
             errors.extend(execution_profile_errors(root, loop))
         if loop.get("state") in prepared_states:

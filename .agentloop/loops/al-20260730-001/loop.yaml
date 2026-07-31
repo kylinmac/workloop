@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: verified
+state: developing
 requirement_version: 7
-updated_at: '2026-07-31T15:09:38+08:00'
+updated_at: '2026-07-31T16:35:07+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -87,8 +87,8 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-007
-    subject_digest: 5e6bbd3ca9eeb110ded48827155fd7e4d3acfd86c0c8f60f54f65d838f681226
+    event_id: gate-008
+    subject_digest: d238e5a9a5db87b20572eebd3c44c111643273e6b3b644141a9a1f47028a49a1
     confidence: medium
   routing_confirmation:
     gate_id: routing_confirmation
@@ -218,6 +218,23 @@ gate_events:
   artifact_digest: 5e6bbd3ca9eeb110ded48827155fd7e4d3acfd86c0c8f60f54f65d838f681226
   at: '2026-07-31T15:04:21+08:00'
   reason: 用户要求修正误判、逐项落问题文档并完成修复
+  affected_pages: []
+  revalidation_scope: []
+- event_id: gate-008
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: user
+  source: codex-host
+  source_event_id: turn-20260731-classification-deadlock
+  authentication: local_attestation
+  requirement_version: 7
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: f890a2b26ecdcc7066287d3bbc5af3de5349cbc747dea8b76dcab245e91bd03d
+  artifact_digest: d238e5a9a5db87b20572eebd3c44c111643273e6b3b644141a9a1f47028a49a1
+  at: '2026-07-31T16:34:50+08:00'
+  reason: 用户明确要求修复并保持需求内容与门禁
   affected_pages: []
   revalidation_scope: []
 git:
@@ -1248,3 +1265,48 @@ transitions:
   evidence:
   - al-20260730-001-evidence-12
   reason: 完整插件生命周期及所有新增负向、恢复、升级回归在提交 9ab804d 上通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T16:32:45+08:00'
+  requirement_version: 7
+  git_commit: 6cf4cba4b794b5ec47e5959503c4f0209788992f
+  evidence: []
+  reason: 新增修复：澄清阶段未确认分类不应被仓库级校验阻断
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T16:34:41+08:00'
+  requirement_version: 7
+  git_commit: 6cf4cba4b794b5ec47e5959503c4f0209788992f
+  evidence: []
+  reason: 分类待确认时机与终止状态语义已澄清
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T16:34:55+08:00'
+  requirement_version: 7
+  git_commit: 6cf4cba4b794b5ec47e5959503c4f0209788992f
+  evidence: []
+  reason: 需求 Gate gate-008 已通过
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T16:35:02+08:00'
+  requirement_version: 7
+  git_commit: 6cf4cba4b794b5ec47e5959503c4f0209788992f
+  evidence: []
+  reason: 按 root-cause 流程复用既有 assurance
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T16:35:07+08:00'
+  requirement_version: 7
+  git_commit: 6cf4cba4b794b5ec47e5959503c4f0209788992f
+  evidence: []
+  reason: 共享分类门禁根因、回归与问题档案已准备

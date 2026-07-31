@@ -119,6 +119,8 @@ epic
 | `blocked` | 暂时无法继续 | 当前负责人 | 阻塞解除并重新检查 `resume_state` |
 | `cancelled` | 任务被明确取消 | 授权者 | 终态 |
 
+`draft`、`clarifying` 允许分类和执行档位保持待确认；完整性门禁位于 `clarifying → awaiting_requirement_confirmation`。澄清前进入 `blocked/cancelled` 的 Loop 保留当时事实，不得使仓库级校验阻断其他 Loop。
+
 ## 正常转换
 
 | 当前状态 | 目标状态 | 必需证据 |

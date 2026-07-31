@@ -328,6 +328,37 @@ def main() -> None:
             "回退支付",
         )
         assert composite.startswith("al-")
+        run(
+            root, "transition", composite, "cancelled",
+            "--actor", "loop-coordinator", "--reason", "需求在澄清前取消",
+        )
+        composite = run(
+            root,
+            "init",
+            "--title",
+            "重新发起复合交付",
+            "--level",
+            "composite",
+            "--subflow",
+            "创建退款",
+        )
+        run(root, "validate")
+        run(
+            root, "transition", composite, "clarifying",
+            "--actor", "requirement-agent", "--reason", "开始需求澄清",
+        )
+        run(root, "validate")
+        unconfirmed = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "transition", composite,
+                "awaiting_requirement_confirmation", "--actor", "requirement-agent",
+                "--reason", "分类尚未确认",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert unconfirmed.returncode != 0
+        assert "classification primary_type is not confirmed" in unconfirmed.stderr
         assured = run(root, "init", "--title", "根因修复", "--level", "standard")
         assured_dir = root / ".agentloop" / "loops" / assured
         assured_path = assured_dir / "loop.yaml"

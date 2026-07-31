@@ -153,3 +153,13 @@ UI Evidence 对导航交互必须证明从来源页面执行真实用户动作�
 6. Evidence 声明结果必须与实际执行一致；所有 flow 执行器都要求当前运行报告和有效断言。
 7. 旧项目可显式升级运行时 Schema，不把标准库覆盖行为误判为缺陷。
 8. 修正清单列明非缺陷和降级项，不为错误结论增加无依据字段或重复状态机。
+
+## 需求版本 7 补充：澄清阶段分类待确认不得造成流程死锁
+
+新建 Loop 在 `draft/clarifying` 可保留 `classification.primary_type: 待确认`；只有进入 `awaiting_requirement_confirmation` 前才强制分类和执行档位完整。澄清前取消或阻塞的旧 Loop 不得使仓库级 `validate` 阻断其他新 Loop。
+
+验收标准：
+
+1. 存在分类待确认的 cancelled 旧 Loop 时，新建 composite Loop 在 `draft` 和 `clarifying` 均能通过 `validate`。
+2. 同一 Loop 尝试进入 `awaiting_requirement_confirmation` 时仍因分类待确认而失败。
+3. 不直接编辑 `loop.yaml`，现有 `al-20260731-002` 的需求内容和状态保持不变。
