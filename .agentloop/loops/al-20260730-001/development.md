@@ -108,3 +108,7 @@ git diff --check
 新增 `prototype-behavior-inventory` Schema 与受控扫描命令，清单绑定原型文件 SHA-256，并把点击监听器、表单提交和导航目标作为独立候选。扩展 prototype matrix 的行为来源映射、旅程责任和导航 outcomes；编码前对 inventory → matrix → user-flow 做差集检查。UI 报告新增 navigation coverage，控制程序要求 `user_action`、来源路由和每个必需 outcome，并拒绝直接导航作为功能证据。
 
 新增 `agentloop/issues/`，每个缺陷一个文档，索引只负责导航。流程规则要求插件修复提交必须包含对应问题档案和回归命令。
+
+## 需求版本 6 补充：设计原则与流程重构
+
+新增唯一原则文档，避免在各流程重复定义同一控制语义；需求阶段建立独立验收义务，开发阶段建立义务到实现/契约/验证的映射，测试阶段独立重算集合并按精确身份消费 Evidence。状态机补齐五项契约，交接和恢复协议补齐证据替代、最小失效、旧产物迁移及五路径回归。控制程序只增加一项必要检查：doctor 必须确认设计原则已进入插件发布快照。

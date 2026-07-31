@@ -7,9 +7,9 @@ execution_profile:
   level: standard
   status: confirmed
   reason: 单插件内的协议、Schema、控制程序与回归测试联动修改，无独立交付单元
-state: verified
+state: developing
 requirement_version: 6
-updated_at: '2026-07-31T12:39:45+08:00'
+updated_at: '2026-07-31T13:51:16+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -1038,3 +1038,52 @@ transitions:
   evidence:
   - al-20260730-001-evidence-10
   reason: 同范围重跑仅最新 Evidence active，不存在提交被拒绝，完整插件回归通过
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T13:41:53+08:00'
+  requirement_version: 6
+  git_commit: 10f1287e58dca9895daaf4d82a65c5c79112fc5d
+  evidence: []
+  reason: 将连续事故的共通根因提升为 AgentLoop 设计原则并重构各阶段与状态机
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: requirement-agent
+  at: '2026-07-31T13:50:54+08:00'
+  requirement_version: 6
+  git_commit: 10f1287e58dca9895daaf4d82a65c5c79112fc5d
+  evidence:
+  - .agentloop/loops/al-20260730-001/requirement.md
+  reason: 共性根因已提升为设计原则，验收义务与跨阶段控制闭环已补充
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T13:51:00+08:00'
+  requirement_version: 6
+  git_commit: 10f1287e58dca9895daaf4d82a65c5c79112fc5d
+  evidence:
+  - .agentloop/loops/al-20260730-001/requirement.md
+  reason: 用户已明确要求按新设计原则调整流程，现有确认事件覆盖当前需求版本
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T13:51:10+08:00'
+  requirement_version: 6
+  git_commit: 10f1287e58dca9895daaf4d82a65c5c79112fc5d
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 已选择根因驱动流程并完成设计原则对各阶段、状态、证据和恢复的影响映射
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: development-agent
+  at: '2026-07-31T13:51:16+08:00'
+  requirement_version: 6
+  git_commit: 10f1287e58dca9895daaf4d82a65c5c79112fc5d
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 编码前控制闭环、兼容策略与五路径回归方案已完成，允许更新协议与插件发布资产检查

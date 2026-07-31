@@ -23,8 +23,9 @@ For every turn:
 
 1. Run `status` and load the selected `loop.yaml`.
 2. Validate the current Loop before changing project files.
-3. Read only the protocol reference needed for the current state and selected
-   development or verification route.
+3. Read `references/agentloop/AgentLoop设计原则.md`, then only the protocol
+   reference needed for the current state and selected development or
+   verification route.
 4. Perform one checkable step allowed by the current state.
 5. Inspect the real artifact, Git state, command result, or Gate event.
 6. Record evidence and use `transition`; never edit `state` directly.
@@ -34,6 +35,12 @@ For every turn:
 Only the Loop coordinator updates the main state. The same Codex agent may act
 as requirement, development, verification, and coordination roles in sequence,
 but records the actual role in every operation.
+
+Every mandatory rule must form one control closure: independent source,
+schema/contract, transition or Gate, real execution Evidence, regression, and
+a reachable recovery path. Recompute required acceptance from its independent
+source; never let an implementation matrix, test list, or passed state prove
+its own completeness.
 
 ## Start or resume
 
@@ -246,8 +253,9 @@ python3 <plugin-root>/scripts/agentloop.py evidence <loop-id> \
 ```
 
 Use `--flow-id` instead of `--check-id` for a reusable flow. Evidence must
-match the current requirement version and exact tested commit. A model's
-prediction is never evidence.
+match `loop_id + requirement_version + scope + flow/check + tested_commit`, be
+current and active, and be superseded by a newer run for the same identity. A
+model's prediction is never evidence.
 
 ## Composite, epic, retry, and recovery
 
@@ -265,6 +273,11 @@ failure handoff, and failure-roundtrip count independent. On failure, rerun the
 failed path, its normal path, affected branches, and required invariant
 neighbors. Respect the configured retry and verification-roundtrip limits;
 persist `blocked` when exhausted.
+
+Protocol-control changes must regress the normal path, fail-closed path,
+replacement rerun, completion rejection recovery, and legacy-artifact upgrade
+path. A new mandatory artifact must include a recovery route that can create it
+without first requiring that artifact.
 
 Advance subflows only with `transition --subflow-id`; parent orchestration does
 not grant coding permission. The control snapshot rejects and restores direct

@@ -61,6 +61,7 @@
 
 ### AgentLoop 控制层
 
+- [AgentLoop 设计原则](agentloop/AgentLoop设计原则.md)
 - [AgentLoop 状态机](agentloop/AgentLoop状态机.md)
 - [AgentLoop 产物与目录协议](agentloop/产物与目录协议.md)
 - [AgentLoop 路由与阶段交接协议](agentloop/路由与阶段交接协议.md)
@@ -88,6 +89,7 @@
 - 测试验证流程分类总览
 - 三类可执行测试验证流程
 - AgentLoop 统一状态机
+- AgentLoop 设计原则与控制闭环
 - AgentLoop 产物与目录协议
 - AgentLoop 路由与阶段交接协议
 - AgentLoop 执行、重试与恢复协议

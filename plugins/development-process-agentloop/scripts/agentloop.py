@@ -2316,6 +2316,7 @@ def cmd_doctor(_: argparse.Namespace) -> None:
         PLUGIN_ROOT / "skills" / "agentloop" / "SKILL.md",
         PLUGIN_ROOT / "hooks" / "hooks.json",
         REFERENCE_ROOT / "README.md",
+        REFERENCE_ROOT / "agentloop" / "AgentLoop设计原则.md",
         SCHEMA_ROOT / "loop.schema.json",
     ]
     missing = [str(path) for path in required if not path.exists()]
