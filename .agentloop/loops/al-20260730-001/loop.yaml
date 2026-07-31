@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: verified
+state: developing
 requirement_version: 7
-updated_at: '2026-07-31T17:20:18+08:00'
+updated_at: '2026-07-31T17:22:34+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -87,7 +87,7 @@ gates:
     gate_id: requirement_confirmation
     status: approved
     mode: manual
-    event_id: gate-009
+    event_id: gate-010
     subject_digest: 0f4fc5c1f93b025ed62ba1649b78d82f873143ada89f58ec54ccebfda8468d23
     confidence: medium
   routing_confirmation:
@@ -254,6 +254,23 @@ gate_events:
   reason: 用户确认按审查优先项完成控制面加固
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-010
+  gate_id: requirement_confirmation
+  decision: approved
+  actor: apple
+  source: codex_user_message
+  source_event_id: user-20260731-gate-010
+  authentication: local_attestation
+  requirement_version: 7
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/requirement.md
+    sha256: 056265156d1cea16e9efcab39b08b08e74ce41196f82efc69e70901ec22e989c
+  artifact_digest: 0f4fc5c1f93b025ed62ba1649b78d82f873143ada89f58ec54ccebfda8468d23
+  at: '2026-07-31T17:22:33+08:00'
+  reason: 用户已要求全部修完并安装，当前修正属于 AC-CTRL-05 安装后回归
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
@@ -291,17 +308,17 @@ git:
 routing:
   status: decided
   confidence: high
-  decided_at: '2026-07-31T17:02:04+08:00'
-  decided_by: development-agent
+  decided_at: '2026-07-31T17:22:33+08:00'
+  decided_by: codex
   development:
     main_flow: root-cause
-    reason: 缺口集中于共享 verified、integration、snapshot 和 runtime 控制入口
+    reason: 修复测试入口未加载插件内 YAML vendor 的单点根因
     supporting_flows: []
     required_outputs:
     - development-assurance
   verification:
     policy: targeted
-    reason: 插件生命周期、负向门禁及系统 Python 运行回归可覆盖
+    reason: 系统 Python、Homebrew Python 与安装缓存完整生命周期回归
     reused_flows: []
     new_flows: []
     executors: {}
@@ -1431,6 +1448,56 @@ transitions:
   evidence:
   - al-20260730-001-evidence-15
   reason: 五项控制面验收义务由当前提交回归证据完整覆盖
+- from: verified
+  to: clarifying
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:22:07+08:00'
+  requirement_version: 7
+  git_commit: 854872238f54136e4ddd4734199ca6a1d5261a17
+  evidence:
+  - 'installed-cache test_agentloop.py ModuleNotFoundError: yaml'
+  reason: 安装后系统 Python 回归发现测试脚本未引入随插件打包的 YAML 运行时
+- from: clarifying
+  to: awaiting_requirement_confirmation
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:22:07+08:00'
+  requirement_version: 7
+  git_commit: 854872238f54136e4ddd4734199ca6a1d5261a17
+  evidence:
+  - .agentloop/loops/al-20260730-001/requirement.md
+  reason: 原验收义务 AC-CTRL-05 的安装后回归修正
+- from: awaiting_requirement_confirmation
+  to: ready_for_development
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:22:33+08:00'
+  requirement_version: 7
+  git_commit: 854872238f54136e4ddd4734199ca6a1d5261a17
+  evidence:
+  - gate-010
+  reason: 安装后回归修正范围与原验收义务已确认
+- from: ready_for_development
+  to: development_preparing
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:22:33+08:00'
+  requirement_version: 7
+  git_commit: 854872238f54136e4ddd4734199ca6a1d5261a17
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 复用既有控制面验收映射
+- from: development_preparing
+  to: developing
+  subflow_id: null
+  actor: codex
+  at: '2026-07-31T17:22:34+08:00'
+  requirement_version: 7
+  git_commit: 854872238f54136e4ddd4734199ca6a1d5261a17
+  evidence:
+  - .agentloop/loops/al-20260730-001/development.md
+  reason: 进入测试运行时修正
 acceptance_obligations:
 - acceptance_id: AC-CTRL-01
   criterion: 两个必需义务仅一个证据时 verified 失败，全部覆盖后通过

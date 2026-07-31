@@ -1,12 +1,12 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "745d99cd1b2acca406ceaedaf8081d44941aa484ee049e57c860cee1d7024b27",
+  "digest": "9d88e32ebef400fc3a4e99a7af8171d567562585fa710620eb6aa348560a0a75",
   "payload": {
-    "state": "verified",
+    "state": "developing",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
-        "event_id": "gate-009",
+        "event_id": "gate-010",
         "subject_digest": "0f4fc5c1f93b025ed62ba1649b78d82f873143ada89f58ec54ccebfda8468d23"
       },
       "routing_confirmation": {
@@ -391,11 +391,11 @@
       "routing": {
         "status": "decided",
         "confidence": "high",
-        "decided_at": "2026-07-31T17:02:04+08:00",
-        "decided_by": "development-agent",
+        "decided_at": "2026-07-31T17:22:33+08:00",
+        "decided_by": "codex",
         "development": {
           "main_flow": "root-cause",
-          "reason": "缺口集中于共享 verified、integration、snapshot 和 runtime 控制入口",
+          "reason": "修复测试入口未加载插件内 YAML vendor 的单点根因",
           "supporting_flows": [],
           "required_outputs": [
             "development-assurance"
@@ -403,42 +403,12 @@
         },
         "verification": {
           "policy": "targeted",
-          "reason": "插件生命周期、负向门禁及系统 Python 运行回归可覆盖",
+          "reason": "系统 Python、Homebrew Python 与安装缓存完整生命周期回归",
           "reused_flows": [],
           "new_flows": [],
           "executors": {}
         }
       }
-    },
-    "integration_control": {
-      "git_integration": {
-        "status": "verified",
-        "base_commit": "b74a61b5f0039c35ece34633557ed2a6bb83537e",
-        "head_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c",
-        "merges": [],
-        "post_merge_checks": [
-          {
-            "check": "full-plugin-regression",
-            "result": "passed"
-          }
-        ],
-        "delivery_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c"
-      },
-      "integration_verification": {
-        "required": false,
-        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
-        "decided_by": "loop-coordinator",
-        "decided_at": "2026-07-30T22:53:27+08:00",
-        "dependencies": [],
-        "state": "not_required",
-        "handoff": {},
-        "failure_handoff": {},
-        "reused_flows": [],
-        "new_flows": [],
-        "executors": {},
-        "verification_failure_roundtrips": 0
-      },
-      "child_loops": []
     }
   }
 }
