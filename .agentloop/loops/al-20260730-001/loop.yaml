@@ -13,9 +13,9 @@ execution_profile:
     low_risk: false
     directly_observable: false
     concurrent_work: false
-state: blocked
+state: done
 requirement_version: 7
-updated_at: '2026-07-31T17:25:27+08:00'
+updated_at: '2026-07-31T17:29:37+08:00'
 owners:
   coordination: loop-coordinator
   requirement: requirement-agent
@@ -68,7 +68,7 @@ integration_data:
   database_objects: []
   verification_flow_id: null
 scope:
-  claim: active
+  claim: released
   claimed_at: '2026-07-30T22:53:27+08:00'
   paths:
   - requirements/flows/需求确认流程.md
@@ -98,10 +98,10 @@ gates:
     subject_digest: null
   completion:
     gate_id: completion
-    status: pending
+    status: approved
     mode: human_acceptance
-    event_id: null
-    subject_digest: null
+    event_id: gate-011
+    subject_digest: 948ec50f97a28b3403a3fe1eda65c74b92efe44d44795df0881ef17bf35a4930
   destructive_action:
     gate_id: destructive_action
     status: not_required
@@ -271,6 +271,25 @@ gate_events:
   reason: 用户已要求全部修完并安装，当前修正属于 AC-CTRL-05 安装后回归
   affected_pages: []
   revalidation_scope: []
+- event_id: gate-011
+  gate_id: completion
+  decision: approved
+  actor: apple
+  source: codex-chat-local-attestation
+  source_event_id: user-message-20260731-completion-approved
+  authentication: local_attestation
+  requirement_version: 7
+  digest_algorithm: sha256-manifest-v1
+  subject_files:
+  - path: .agentloop/loops/al-20260730-001/development.md
+    sha256: 9191fc190e5f4d079489af587534094c47b4528bbb9fe2364ddaed4393b97fa2
+  - path: .agentloop/loops/al-20260730-001/evidence.yaml
+    sha256: be9ca662bb2d3556fd4d030fb394c14c998c56e327140fc87e5b1f24f0a4ea35
+  artifact_digest: 948ec50f97a28b3403a3fe1eda65c74b92efe44d44795df0881ef17bf35a4930
+  at: '2026-07-31T17:29:26+08:00'
+  reason: 用户明确回复：验收通过，完成吧
+  affected_pages: []
+  revalidation_scope: []
 git:
   root: .
   target_branch: main
@@ -379,11 +398,7 @@ verification_handoff:
   check: python3 plugins/development-process-agentloop/scripts/test_agentloop.py
 failure_handoff: null
 artifacts: []
-blocked:
-  reason: 实现与验证已完成，等待用户明确批准 completion Gate
-  owner: codex
-  unblock_condition: 用户明确批准 completion Gate
-  resume_state: verified
+blocked: null
 transitions:
 - from: null
   to: draft
@@ -1542,6 +1557,26 @@ transitions:
   evidence:
   - al-20260730-001-evidence-16
   reason: 实现与验证已完成，等待用户明确批准 completion Gate
+- from: blocked
+  to: verified
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T17:29:16+08:00'
+  requirement_version: 7
+  git_commit: 423cba0e5a3b1525e2b74f874c3eb4146d89739f
+  evidence:
+  - al-20260730-001-evidence-16
+  reason: 用户已明确确认验收通过，解除 completion Gate 等待阻塞
+- from: verified
+  to: done
+  subflow_id: null
+  actor: loop-coordinator
+  at: '2026-07-31T17:29:37+08:00'
+  requirement_version: 7
+  git_commit: 423cba0e5a3b1525e2b74f874c3eb4146d89739f
+  evidence:
+  - gate-011
+  reason: 必需验证有效、交付提交可查询且 completion Gate gate-011 已由用户批准
 acceptance_obligations:
 - acceptance_id: AC-CTRL-01
   criterion: 两个必需义务仅一个证据时 verified 失败，全部覆盖后通过

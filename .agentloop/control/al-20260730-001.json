@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v3",
-  "digest": "d826768ecc5ba360d48a04913e02afccb7c44b4696c07efc08aefc4f69a04bc7",
+  "digest": "8946e923698cb13de4dc2a2814441263958e7b5123ae33a887efe75f6380361f",
   "payload": {
-    "state": "blocked",
+    "state": "done",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -15,9 +15,9 @@
         "subject_digest": null
       },
       "completion": {
-        "status": "pending",
-        "event_id": null,
-        "subject_digest": null
+        "status": "approved",
+        "event_id": "gate-011",
+        "subject_digest": "948ec50f97a28b3403a3fe1eda65c74b92efe44d44795df0881ef17bf35a4930"
       },
       "destructive_action": {
         "status": "not_required",
@@ -390,7 +390,7 @@
     },
     "development_control": {
       "scope": {
-        "claim": "active",
+        "claim": "released",
         "claimed_at": "2026-07-30T22:53:27+08:00",
         "paths": [
           "requirements/flows/需求确认流程.md",
@@ -427,6 +427,36 @@
           "executors": {}
         }
       }
+    },
+    "integration_control": {
+      "git_integration": {
+        "status": "verified",
+        "base_commit": "b74a61b5f0039c35ece34633557ed2a6bb83537e",
+        "head_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c",
+        "merges": [],
+        "post_merge_checks": [
+          {
+            "check": "full-plugin-regression",
+            "result": "passed"
+          }
+        ],
+        "delivery_commit": "9d86713b0c55fe3ee152af178625db6f7cf6863c"
+      },
+      "integration_verification": {
+        "required": false,
+        "reason": "初始值；复合或 epic 进入 orchestrating 前必须明确决定",
+        "decided_by": "loop-coordinator",
+        "decided_at": "2026-07-30T22:53:27+08:00",
+        "dependencies": [],
+        "state": "not_required",
+        "handoff": {},
+        "failure_handoff": {},
+        "reused_flows": [],
+        "new_flows": [],
+        "executors": {},
+        "verification_failure_roundtrips": 0
+      },
+      "child_loops": []
     }
   }
 }
