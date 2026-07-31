@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256-control-v2",
-  "digest": "726d0b41f88dbe56ffa79fde68db2e6438c186b1a74175eaeb0b8685cc71cc5e",
+  "digest": "b3668be1136e02331d47d2f4e2a9947be92ca98a5c3d520f57335b051d0d8b6e",
   "payload": {
-    "state": "developing",
+    "state": "verified",
     "gates": {
       "requirement_confirmation": {
         "status": "approved",
@@ -158,6 +158,28 @@
         "exit_code": 0,
         "validity": "active",
         "code_commit": "9ab804d9df33a7a530b8bebe382e820a69a67449"
+      },
+      "al-20260730-001-evidence-13": {
+        "flow_id": null,
+        "check_id": "classification-phase-regression",
+        "subflow_id": null,
+        "requirement_version": 7,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd"
+      },
+      "al-20260730-001-evidence-14": {
+        "flow_id": null,
+        "check_id": "real-composite-draft-validate",
+        "subflow_id": null,
+        "requirement_version": 7,
+        "executor": "command",
+        "result": "passed",
+        "exit_code": 0,
+        "validity": "active",
+        "code_commit": "7adee38ba68d6ffdde3df4a48dca1eb8e7cc53dd"
       }
     }
   }
