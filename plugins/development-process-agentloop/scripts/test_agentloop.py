@@ -20,6 +20,7 @@ PROTOTYPE_FIDELITY_TEST = Path(__file__).with_name("test_prototype_fidelity.py")
 INTEGRATION_DATA_TEST = Path(__file__).with_name("test_integration_data_source.py")
 PRODUCTION_PROTOTYPE_TEST = Path(__file__).with_name("test_production_prototype_gate.py")
 CONTEXT_PROJECTION_TEST = Path(__file__).with_name("test_context_projection.py")
+REASONING_CONTROLS_TEST = Path(__file__).with_name("test_reasoning_controls.py")
 HOOKS = ENGINE.parents[1] / "hooks" / "hooks.json"
 SKILLS = ENGINE.parents[1] / "skills"
 
@@ -77,6 +78,7 @@ def git(root: Path, *args: str) -> None:
 def main() -> None:
     subprocess.run(["python3", str(SYNC_REFERENCES), "verify"], check=True)
     subprocess.run(["python3", str(CONTEXT_PROJECTION_TEST)], check=True)
+    subprocess.run(["python3", str(REASONING_CONTROLS_TEST)], check=True)
     system_python = Path("/usr/bin/python3")
     if system_python.exists():
         subprocess.run([str(system_python), str(ENGINE), "doctor"], check=True)
@@ -369,11 +371,29 @@ def main() -> None:
             "--risk-statement", "变更范围局限且主要风险是局部回归",
             "--risk-evidence", "已确认的单文件范围和验收映射",
             "--risk-severity", "low",
+            "--secondary-risk", json.dumps({
+                "category": "user-experience",
+                "statement": "文案变化可能影响页面表达",
+                "evidence": "README 是用户可见入口",
+                "severity": "low",
+                "handling": "supporting_flow",
+            }, ensure_ascii=False),
+            "--secondary-risk", json.dumps({
+                "category": "technical-feasibility",
+                "statement": "系统 Python 环境必须可运行",
+                "evidence": "插件声明为自包含运行时",
+                "severity": "low",
+                "handling": "verification_obligation",
+                "verification_obligation": "使用 /usr/bin/python3 执行 doctor",
+            }, ensure_ascii=False),
             "--verification",
             "self_check",
             "--verification-reason",
             "结果可直接观察",
         )
+        routed = yaml.safe_load(loop_path.read_text())
+        assert len(routed["routing"]["risk_driver"]["secondary_risks"]) == 2
+        assert "product-prototype" in routed["routing"]["development"]["supporting_flows"]
         run(
             root,
             "transition",
@@ -511,6 +531,9 @@ def main() -> None:
         legacy_loop = yaml.safe_load(legacy_path.read_text())
         legacy_loop["classification"]["control_version"] = 1
         legacy_loop.pop("acceptance_obligations")
+        legacy_loop.pop("assumptions")
+        legacy_loop.pop("decision_records")
+        legacy_loop["routing"].pop("risk_driver")
         legacy_path.write_text(yaml.safe_dump(legacy_loop, allow_unicode=True, sort_keys=False))
         legacy_validation = subprocess.run(
             ["python3", str(ENGINE), "--root", str(root), "validate"],
@@ -523,6 +546,10 @@ def main() -> None:
         assert migrated["state"] == "clarifying"
         assert migrated["classification"]["control_version"] == 2
         assert migrated["acceptance_obligations"] == []
+        assert migrated["assumptions"] == []
+        assert migrated["decision_records"] == []
+        assert migrated["routing"]["risk_driver"] is None
+        assert migrated["routing"]["status"] == "pending"
         run(
             root, "transition", legacy, "cancelled",
             "--actor", "loop-coordinator", "--reason", "迁移回归完成",
@@ -533,6 +560,37 @@ def main() -> None:
             (ENGINE.parents[1] / "references" / "agentloop" / "schemas" / "loop.schema.json").read_text()
         )
         assert not list(Validator(loop_schema).iter_errors(terminal_history))
+
+        reasoning_legacy = run(
+            root, "init", "--title", "旧推理控制 Loop", "--level", "standard"
+        )
+        reasoning_path = root / ".agentloop" / "loops" / reasoning_legacy / "loop.yaml"
+        reasoning_loop = yaml.safe_load(reasoning_path.read_text())
+        reasoning_loop.pop("assumptions")
+        reasoning_loop.pop("decision_records")
+        reasoning_loop["routing"].pop("risk_driver")
+        reasoning_path.write_text(
+            yaml.safe_dump(reasoning_loop, allow_unicode=True, sort_keys=False)
+        )
+        reasoning_validation = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "validate"],
+            text=True,
+            capture_output=True,
+        )
+        assert (
+            reasoning_validation.returncode != 0
+            and "reasoning control fields require `agentloop migrate-v2`"
+            in reasoning_validation.stderr
+        )
+        run(root, "migrate-v2", reasoning_legacy, "--actor", "loop-coordinator")
+        migrated_reasoning = yaml.safe_load(reasoning_path.read_text())
+        assert migrated_reasoning["assumptions"] == []
+        assert migrated_reasoning["decision_records"] == []
+        assert migrated_reasoning["routing"]["risk_driver"] is None
+        run(
+            root, "transition", reasoning_legacy, "cancelled",
+            "--actor", "loop-coordinator", "--reason", "推理迁移回归完成",
+        )
 
         composite = run(
             root,

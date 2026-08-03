@@ -511,6 +511,26 @@ def classification_errors(loop: dict) -> list[str]:
     return errors
 
 
+def reasoning_control_errors(loop: dict) -> list[str]:
+    if loop.get("state") in TERMINAL_STATES:
+        return []
+    missing = []
+    if "assumptions" not in loop:
+        missing.append("assumptions")
+    if "decision_records" not in loop:
+        missing.append("decision_records")
+    routing = loop.get("routing", {})
+    if "risk_driver" not in routing:
+        missing.append("routing.risk_driver")
+    elif isinstance(routing.get("risk_driver"), dict) and "secondary_risks" not in routing["risk_driver"]:
+        missing.append("routing.risk_driver.secondary_risks")
+    if missing:
+        return [
+            f"reasoning control fields require `agentloop migrate-v2`: {sorted(missing)}"
+        ]
+    return []
+
+
 def acceptance_requirement_errors(loop: dict) -> list[str]:
     obligations = loop.get("acceptance_obligations", [])
     if not obligations:
@@ -1428,6 +1448,10 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             errors.append(
                 f"{loop.get('loop_id')}: classification control v1 must be upgraded with `agentloop migrate-v2`"
             )
+        errors.extend(
+            f"{loop.get('loop_id')}: {error}"
+            for error in reasoning_control_errors(loop)
+        )
         gate_ids = set()
         if loop.get("state") not in {"draft", "clarifying", "awaiting_requirement_confirmation"}:
             gate_ids.add("requirement_confirmation")
@@ -1997,9 +2021,18 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     path, loop = load_loop(root, args.loop_id)
     if loop["state"] in TERMINAL_STATES:
         raise ValueError("terminal Loop history does not require v2 migration")
+    routing = loop.setdefault("routing", {})
+    risk_driver = routing.get("risk_driver")
+    reasoning_complete = (
+        "assumptions" in loop
+        and "decision_records" in loop
+        and "risk_driver" in routing
+        and (risk_driver is None or "secondary_risks" in risk_driver)
+    )
     if (
         loop.get("classification", {}).get("control_version") == 2
         and "acceptance_obligations" in loop
+        and reasoning_complete
     ):
         raise ValueError("Loop already uses control v2")
     previous = loop["state"]
@@ -2008,6 +2041,8 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     classification.setdefault("basis", "待迁移后重新确认")
     classification.setdefault("obligations", [])
     loop["acceptance_obligations"] = []
+    loop.setdefault("assumptions", [])
+    loop.setdefault("decision_records", [])
     profile = loop["execution_profile"]
     profile["status"] = "provisional"
     profile["qualifications"] = {
@@ -2019,7 +2054,10 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     }
     loop["state"] = "clarifying"
     loop["blocked"] = None
-    loop["routing"]["status"] = "pending"
+    routing["status"] = "pending"
+    routing["decided_at"] = None
+    routing["decided_by"] = None
+    routing["risk_driver"] = None
     for gate_id in ("requirement_confirmation", "routing_confirmation", "completion"):
         gate_value = loop["gates"][gate_id]
         gate_value["status"] = "pending" if gate_id != "routing_confirmation" else "not_required"
@@ -2312,6 +2350,9 @@ def cmd_prototype_scan(args: argparse.Namespace) -> None:
 def cmd_route(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
     if loop["state"] not in {"ready_for_development", "development_preparing"}:
         raise ValueError("routing is only allowed in ready_for_development or development_preparing")
     blocking = [
@@ -2326,6 +2367,55 @@ def cmd_route(args: argparse.Namespace) -> None:
             f"risk category {args.risk_category} requires main flow {expected_flow}; "
             f"got {args.main_flow}"
         )
+    secondary_risks = []
+    seen_categories = {args.risk_category}
+    supporting_flows = list(dict.fromkeys(args.supporting_flow or []))
+    for raw in args.secondary_risk or []:
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"invalid --secondary-risk JSON: {error.msg}") from error
+        if not isinstance(value, dict):
+            raise ValueError("--secondary-risk must be a JSON object")
+        required = {"category", "statement", "evidence", "severity", "handling"}
+        missing = required - set(value)
+        if missing:
+            raise ValueError(f"secondary risk is missing fields: {sorted(missing)}")
+        category = value["category"]
+        if category not in RISK_FLOW_MAP:
+            raise ValueError(f"unknown secondary risk category: {category}")
+        if category in seen_categories:
+            raise ValueError(f"risk category is duplicated: {category}")
+        seen_categories.add(category)
+        if value["severity"] not in {"low", "medium", "high"}:
+            raise ValueError("secondary risk severity must be low, medium, or high")
+        if not str(value["statement"]).strip() or not str(value["evidence"]).strip():
+            raise ValueError("secondary risk statement and evidence must be non-empty")
+        handling = value["handling"]
+        if handling == "supporting_flow":
+            flow_id = RISK_FLOW_MAP[category]
+            if flow_id not in supporting_flows:
+                supporting_flows.append(flow_id)
+            mapped = {"kind": "supporting_flow", "flow_id": flow_id}
+        elif handling == "verification_obligation":
+            obligation = str(value.get("verification_obligation", "")).strip()
+            if not obligation:
+                raise ValueError(
+                    "secondary risk with verification_obligation handling requires "
+                    "verification_obligation"
+                )
+            mapped = {"kind": "verification_obligation", "obligation": obligation}
+        else:
+            raise ValueError(
+                "secondary risk handling must be supporting_flow or verification_obligation"
+            )
+        secondary_risks.append({
+            "category": category,
+            "statement": value["statement"],
+            "evidence": value["evidence"],
+            "severity": value["severity"],
+            "mapping": mapped,
+        })
     with loop_lock(root, args.loop_id, args.actor):
         loop["routing"].update(
             {
@@ -2338,6 +2428,7 @@ def cmd_route(args: argparse.Namespace) -> None:
                     "statement": args.risk_statement,
                     "evidence": args.risk_evidence,
                     "severity": args.risk_severity,
+                    "secondary_risks": secondary_risks,
                 },
             }
         )
@@ -2345,7 +2436,7 @@ def cmd_route(args: argparse.Namespace) -> None:
             {
                 "main_flow": args.main_flow,
                 "reason": args.reason,
-                "supporting_flows": args.supporting_flow or [],
+                "supporting_flows": supporting_flows,
                 "required_outputs": args.required_output or [],
             }
         )
@@ -2411,6 +2502,9 @@ def cmd_route(args: argparse.Namespace) -> None:
 def cmd_assumption(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
     items = loop.setdefault("assumptions", [])
     item = next((value for value in items if value["assumption_id"] == args.assumption_id), None)
     if item is None:
@@ -2446,6 +2540,9 @@ def cmd_assumption(args: argparse.Namespace) -> None:
 def cmd_decision(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
     options = list(dict.fromkeys(args.option))
     if args.selected not in options:
         raise ValueError("--selected must be one of --option")
@@ -2814,6 +2911,8 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     if current == "blocked" and loop.get("blocked", {}).get("resume_state"):
         allowed.add(loop["blocked"]["resume_state"])
     errors = [] if target in allowed else [f"illegal transition: {current} -> {target}"]
+    if target != "cancelled":
+        errors.extend(reasoning_control_errors(loop))
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
@@ -3565,6 +3664,14 @@ def parser() -> argparse.ArgumentParser:
     route.add_argument("--risk-statement", required=True)
     route.add_argument("--risk-evidence", required=True)
     route.add_argument("--risk-severity", choices=["low", "medium", "high"], required=True)
+    route.add_argument(
+        "--secondary-risk",
+        action="append",
+        help=(
+            "JSON object with category, statement, evidence, severity, handling, and "
+            "verification_obligation when handling is verification_obligation"
+        ),
+    )
     route.add_argument("--supporting-flow", action="append")
     route.add_argument("--required-output", action="append")
     route.add_argument("--verification", choices=["self_check", "targeted", "flow"], required=True)
