@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop Controls"
+  short_description: "Check gates contracts evidence and work-item scope"
+  default_prompt: "Check the active Workloop gate and project its work item."

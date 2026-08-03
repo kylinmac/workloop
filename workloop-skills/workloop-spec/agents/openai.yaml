@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop Spec"
+  short_description: "Clarify intent assumptions risk and acceptance"
+  default_prompt: "Create a Workloop spec for this requirement."

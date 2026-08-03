@@ -1,4 +1,0 @@
-interface:
-  display_name: "Workloop Core"
-  short_description: "Split and verify software work with minimal artifacts"
-  default_prompt: "Use $workloop to turn this development request into small, verifiable work items."

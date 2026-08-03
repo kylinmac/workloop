@@ -1,0 +1,24 @@
+{
+  "name": "workloop-plugin",
+  "version": "0.1.0",
+  "description": "Add deterministic gates, work-item projections, and optional Contract checks to the Workloop method.",
+  "author": {
+    "name": "Workloop"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Workloop Plugin",
+    "shortDescription": "Deterministic gates for lightweight Workloop artifacts.",
+    "longDescription": "Checks Workloop state changes, acceptance coverage, blocking assumptions, shared Contracts, Evidence references, independent review structure, and active work-item scope without recreating the old governance model.",
+    "developerName": "Workloop",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Check the active Workloop gate.",
+      "Project the current Workloop work item."
+    ]
+  }
+}

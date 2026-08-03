@@ -1,0 +1,29 @@
+{
+  "description": "Load active Workloop state and guard code edits outside the active work item.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/workloop.py\" hook session-start",
+            "statusMessage": "Loading Workloop state",
+            "additionalContextLimit": 500
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/workloop.py\" hook pre-tool",
+            "statusMessage": "Checking Workloop scope"
+          }
+        ]
+      }
+    ]
+  }
+}

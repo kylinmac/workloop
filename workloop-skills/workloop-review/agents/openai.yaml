@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop Review"
+  short_description: "Independently verify semantics and evidence"
+  default_prompt: "Independently review this Workloop implementation."

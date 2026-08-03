@@ -1,26 +1,14 @@
 {
-  "name": "development-process",
+  "name": "workloop",
   "interface": {
-    "displayName": "Development Process"
+    "displayName": "Workloop"
   },
   "plugins": [
     {
-      "name": "development-process-agentloop",
+      "name": "workloop-plugin",
       "source": {
         "source": "local",
-        "path": "./plugins/development-process-agentloop"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
-      "name": "workloop",
-      "source": {
-        "source": "local",
-        "path": "./plugins/workloop"
+        "path": "./workloop-plugin"
       },
       "policy": {
         "installation": "AVAILABLE",
