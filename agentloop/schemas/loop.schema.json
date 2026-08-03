@@ -535,12 +535,48 @@
         "decided_by": {"type": ["string", "null"]},
         "risk_driver": {
           "type": ["object", "null"], "additionalProperties": false,
-          "required": ["category", "statement", "evidence", "severity"],
+          "required": ["category", "statement", "evidence", "severity", "secondary_risks"],
           "properties": {
             "category": {"enum": ["localized-change", "user-experience", "business-workflow", "data-contract", "domain-rules", "system-boundary", "root-cause", "migration-compatibility", "technical-feasibility"]},
             "statement": {"type": "string", "minLength": 1},
             "evidence": {"type": "string", "minLength": 1},
-            "severity": {"enum": ["low", "medium", "high"]}
+            "severity": {"enum": ["low", "medium", "high"]},
+            "secondary_risks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["category", "statement", "evidence", "severity", "mapping"],
+                "properties": {
+                  "category": {"enum": ["localized-change", "user-experience", "business-workflow", "data-contract", "domain-rules", "system-boundary", "root-cause", "migration-compatibility", "technical-feasibility"]},
+                  "statement": {"type": "string", "minLength": 1},
+                  "evidence": {"type": "string", "minLength": 1},
+                  "severity": {"enum": ["low", "medium", "high"]},
+                  "mapping": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["kind", "flow_id"],
+                        "properties": {
+                          "kind": {"const": "supporting_flow"},
+                          "flow_id": {"enum": ["quick-change", "product-prototype", "business-process", "data-contract", "domain-model", "architecture", "root-cause", "migration-compatibility", "technical-validation"]}
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["kind", "obligation"],
+                        "properties": {
+                          "kind": {"const": "verification_obligation"},
+                          "obligation": {"type": "string", "minLength": 1}
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
           }
         },
         "development": {
