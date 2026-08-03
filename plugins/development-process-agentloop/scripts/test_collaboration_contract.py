@@ -34,7 +34,7 @@ def succeed(root: Path, *args: str) -> str:
 
 def main() -> None:
     with tempfile.TemporaryDirectory() as directory:
-        root = Path(directory)
+        root = Path(directory).resolve()
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
         subprocess.run(["git", "config", "user.name", "Contract Test"], cwd=root, check=True)
         subprocess.run(["git", "config", "user.email", "contract@example.invalid"], cwd=root, check=True)
