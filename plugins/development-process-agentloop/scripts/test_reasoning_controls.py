@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,9 @@ import yaml
 
 
 ENGINE = Path(__file__).with_name("agentloop.py")
+SPEC = importlib.util.spec_from_file_location("agentloop_engine", ENGINE)
+engine = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(engine)
 
 
 def invoke(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -50,6 +54,8 @@ def main() -> None:
         loop_path = root / ".agentloop" / "loops" / loop_id / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
         assert loop["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
+        assert loop["quality_metrics"] == []
+        assert loop["failure_memory"] == []
 
         fail(
             root,
@@ -166,6 +172,91 @@ def main() -> None:
             "--question", "重复决策", "--option", "A", "--option", "B",
             "--selected", "A", "--evidence", "实验", "--rationale", "重复",
         )
+
+        succeed(
+            root,
+            "quality-metric", loop_id, "--metric-id", "MET-01", "--actor", "tester",
+            "--name", "响应时间", "--unit", "ms", "--baseline", "150",
+            "--operator", "lte", "--target", "100", "--required",
+        )
+        fail(
+            root,
+            "measured quality metric requires at least one --evidence",
+            "quality-metric", loop_id, "--metric-id", "MET-01", "--actor", "tester",
+            "--actual", "120",
+        )
+        succeed(
+            root,
+            "quality-metric", loop_id, "--metric-id", "MET-01", "--actor", "tester",
+            "--actual", "120", "--evidence", "benchmark-failed.json",
+        )
+        evidence_path = loop_path.with_name("evidence.yaml")
+        evidence_path.write_text(yaml.safe_dump({
+            "schema_version": 1,
+            "loop_id": loop_id,
+            "runs": [
+                {
+                    "evidence_id": f"{loop_id}-evidence-01",
+                    "requirement_version": 1,
+                    "result": "failed",
+                    "validity": "stale",
+                },
+                {
+                    "evidence_id": f"{loop_id}-evidence-02",
+                    "requirement_version": 1,
+                    "result": "passed",
+                    "validity": "active",
+                },
+            ],
+        }, allow_unicode=True, sort_keys=False))
+        engine.write_control_snapshot(root, yaml.safe_load(loop_path.read_text()))
+        fail(
+            root,
+            "requires an assumption/decision link or --unlinked-reason",
+            "failure-memory", loop_id, "--failure-id", "FAI-01", "--actor", "tester",
+            "--evidence-id", f"{loop_id}-evidence-01", "--mistake", "错误使用旧口径",
+            "--actual-reason", "关键假设未验证", "--prevention", "先验证时间口径",
+        )
+        fail(
+            root,
+            "unknown assumptions",
+            "failure-memory", loop_id, "--failure-id", "FAI-01", "--actor", "tester",
+            "--evidence-id", f"{loop_id}-evidence-01", "--mistake", "错误使用旧口径",
+            "--actual-reason", "关键假设未验证", "--prevention", "先验证时间口径",
+            "--assumption-id", "ASM-99",
+        )
+        succeed(
+            root,
+            "failure-memory", loop_id, "--failure-id", "FAI-01", "--actor", "tester",
+            "--evidence-id", f"{loop_id}-evidence-01", "--mistake", "错误使用旧口径",
+            "--actual-reason", "关键假设未验证", "--prevention", "先验证时间口径",
+            "--assumption-id", "ASM-01", "--decision-id", "DEC-01",
+            "--metric-id", "MET-01",
+        )
+        loop = yaml.safe_load(loop_path.read_text())
+        completion_errors = engine.learning_control_errors(root, loop, completion=True)
+        assert any("failure prevention is not verified" in error for error in completion_errors)
+        assert any("required quality metrics are not met" in error for error in completion_errors)
+        succeed(
+            root,
+            "quality-metric", loop_id, "--metric-id", "MET-01", "--actor", "tester",
+            "--actual", "80", "--evidence", "benchmark-passed.json",
+        )
+        fail(
+            root,
+            "prevention evidence is not active and passed",
+            "failure-memory", loop_id, "--failure-id", "FAI-01", "--actor", "tester",
+            "--status", "prevention_verified",
+            "--verification-evidence", f"{loop_id}-evidence-01",
+        )
+        succeed(
+            root,
+            "failure-memory", loop_id, "--failure-id", "FAI-01", "--actor", "tester",
+            "--status", "prevention_verified",
+            "--verification-evidence", f"{loop_id}-evidence-02",
+        )
+        loop = yaml.safe_load(loop_path.read_text())
+        assert engine.learning_control_errors(root, loop, completion=True) == []
 
     print("passed: reasoning control negative CLI cases")
 

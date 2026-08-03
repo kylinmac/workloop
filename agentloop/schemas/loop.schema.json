@@ -136,6 +136,8 @@
     "assumptions": {"type": "array", "items": {"$ref": "#/$defs/assumption"}},
     "decision_records": {"type": "array", "items": {"$ref": "#/$defs/decision_record"}},
     "knowledge_state": {"$ref": "#/$defs/knowledge_state"},
+    "quality_metrics": {"type": "array", "items": {"$ref": "#/$defs/quality_metric"}},
+    "failure_memory": {"type": "array", "items": {"$ref": "#/$defs/failure_record"}},
     "prototype": {"$ref": "#/$defs/prototype"},
     "integration_data": {"$ref": "#/$defs/integration_data"},
     "scope": {"$ref": "#/$defs/scope"},
@@ -327,6 +329,72 @@
         "actor": {"type": "string", "minLength": 1},
         "decided_at": {"type": "string", "format": "date-time"}
       }
+    },
+    "quality_metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "name", "unit", "baseline", "target", "actual", "required", "status", "evidence", "owner", "updated_at"],
+      "properties": {
+        "metric_id": {"type": "string", "pattern": "^MET-[0-9]{2,}$"},
+        "name": {"type": "string", "minLength": 1},
+        "unit": {"type": "string", "minLength": 1},
+        "baseline": {"type": ["number", "null"]},
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operator", "value"],
+          "properties": {
+            "operator": {"enum": ["gte", "lte", "eq"]},
+            "value": {"type": "number"}
+          }
+        },
+        "actual": {"type": ["number", "null"]},
+        "required": {"type": "boolean"},
+        "status": {"enum": ["pending", "met", "missed"]},
+        "evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "owner": {"type": "string", "minLength": 1},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "pending"}}},
+        "then": {"properties": {"actual": {"type": "null"}, "evidence": {"maxItems": 0}}},
+        "else": {"properties": {"actual": {"type": "number"}, "evidence": {"minItems": 1}}}
+      }]
+    },
+    "failure_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "evidence_id", "mistake", "actual_reason", "prevention", "assumption_ids", "decision_ids", "metric_ids", "unlinked_reason", "status", "verification_evidence", "actor", "recorded_at", "updated_at"],
+      "properties": {
+        "failure_id": {"type": "string", "pattern": "^FAI-[0-9]{2,}$"},
+        "evidence_id": {"type": "string", "minLength": 1},
+        "mistake": {"type": "string", "minLength": 1},
+        "actual_reason": {"type": "string", "minLength": 1},
+        "prevention": {"type": "string", "minLength": 1},
+        "assumption_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^ASM-[0-9]{2,}$"}},
+        "decision_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^DEC-[0-9]{2,}$"}},
+        "metric_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^MET-[0-9]{2,}$"}},
+        "unlinked_reason": {"type": ["string", "null"]},
+        "status": {"enum": ["open", "prevention_verified"]},
+        "verification_evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "actor": {"type": "string", "minLength": 1},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "anyOf": [
+            {"properties": {"assumption_ids": {"minItems": 1}}},
+            {"properties": {"decision_ids": {"minItems": 1}}},
+            {"properties": {"unlinked_reason": {"type": "string", "minLength": 1}}}
+          ]
+        },
+        {
+          "if": {"properties": {"status": {"const": "prevention_verified"}}},
+          "then": {"properties": {"verification_evidence": {"minItems": 1}}},
+          "else": {"properties": {"verification_evidence": {"maxItems": 0}}}
+        }
+      ]
     },
     "knowledge_state": {
       "type": "object",

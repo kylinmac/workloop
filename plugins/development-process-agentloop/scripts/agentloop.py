@@ -244,6 +244,8 @@ def controlled_payload(root: Path, loop: dict) -> dict:
             "assumptions": loop.get("assumptions", []),
             "decision_records": loop.get("decision_records", []),
             "knowledge_state": loop.get("knowledge_state", empty_knowledge_state()),
+            "quality_metrics": loop.get("quality_metrics", []),
+            "failure_memory": loop.get("failure_memory", []),
         }
     development_states = {
         "development_preparing", "developing", "ready_for_verification",
@@ -522,6 +524,10 @@ def reasoning_control_errors(loop: dict) -> list[str]:
         missing.append("decision_records")
     if "knowledge_state" not in loop:
         missing.append("knowledge_state")
+    if "quality_metrics" not in loop:
+        missing.append("quality_metrics")
+    if "failure_memory" not in loop:
+        missing.append("failure_memory")
     routing = loop.get("routing", {})
     if "risk_driver" not in routing:
         missing.append("routing.risk_driver")
@@ -560,6 +566,92 @@ def knowledge_state_errors(loop: dict) -> list[str]:
         for item in knowledge.get(bucket, [])
     ]
     return ["knowledge_id values must be unique across all knowledge kinds"] if len(ids) != len(set(ids)) else []
+
+
+def metric_status(operator: str, target: float, actual: float | None) -> str:
+    if actual is None:
+        return "pending"
+    comparisons = {
+        "gte": actual >= target,
+        "lte": actual <= target,
+        "eq": actual == target,
+    }
+    return "met" if comparisons[operator] else "missed"
+
+
+def learning_control_errors(root: Path, loop: dict, completion: bool = False) -> list[str]:
+    metrics = loop.get("quality_metrics")
+    failures = loop.get("failure_memory")
+    if not isinstance(metrics, list) or not isinstance(failures, list):
+        return []
+    errors = []
+    metric_ids = [item.get("metric_id") for item in metrics]
+    failure_ids = [item.get("failure_id") for item in failures]
+    if len(metric_ids) != len(set(metric_ids)):
+        errors.append("quality metric_id values must be unique")
+    if len(failure_ids) != len(set(failure_ids)):
+        errors.append("failure_id values must be unique")
+    metric_map = {item.get("metric_id"): item for item in metrics}
+    assumption_ids = {item.get("assumption_id") for item in loop.get("assumptions", [])}
+    decision_ids = {item.get("decision_id") for item in loop.get("decision_records", [])}
+    evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    runs = {item.get("evidence_id"): item for item in evidence.get("runs", [])}
+    for item in metrics:
+        target = item.get("target", {})
+        if (
+            target.get("operator") in {"gte", "lte", "eq"}
+            and isinstance(target.get("value"), (int, float))
+            and (item.get("actual") is None or isinstance(item.get("actual"), (int, float)))
+        ):
+            expected = metric_status(target["operator"], target["value"], item.get("actual"))
+            if item.get("status") != expected:
+                errors.append(f"{item.get('metric_id')}: metric status does not match actual value")
+    for item in failures:
+        failure_id = item.get("failure_id")
+        run = runs.get(item.get("evidence_id"))
+        if run is None or run.get("result") != "failed":
+            errors.append(f"{failure_id}: failure memory must reference failed evidence")
+        unknown_assumptions = set(item.get("assumption_ids", [])) - assumption_ids
+        unknown_decisions = set(item.get("decision_ids", [])) - decision_ids
+        unknown_metrics = set(item.get("metric_ids", [])) - set(metric_map)
+        if unknown_assumptions:
+            errors.append(f"{failure_id}: unknown assumptions: {sorted(unknown_assumptions)}")
+        if unknown_decisions:
+            errors.append(f"{failure_id}: unknown decisions: {sorted(unknown_decisions)}")
+        if unknown_metrics:
+            errors.append(f"{failure_id}: unknown quality metrics: {sorted(unknown_metrics)}")
+        for evidence_id in item.get("verification_evidence", []):
+            verification = runs.get(evidence_id)
+            if (
+                verification is None
+                or verification.get("result") != "passed"
+                or verification.get("validity") != "active"
+            ):
+                errors.append(f"{failure_id}: prevention evidence is not active and passed: {evidence_id}")
+    if completion:
+        recorded = {item.get("evidence_id") for item in failures}
+        missing = sorted(
+            evidence_id for evidence_id, run in runs.items()
+            if run.get("result") == "failed"
+            and run.get("requirement_version") == loop.get("requirement_version")
+            and evidence_id not in recorded
+        )
+        if missing:
+            errors.append(f"failed evidence has no failure memory: {missing}")
+        open_failures = sorted(
+            item.get("failure_id") for item in failures
+            if item.get("status") != "prevention_verified"
+        )
+        if open_failures:
+            errors.append(f"failure prevention is not verified: {open_failures}")
+        incomplete_metrics = sorted(
+            item.get("metric_id") for item in metrics
+            if item.get("required") and item.get("status") != "met"
+        )
+        if incomplete_metrics:
+            errors.append(f"required quality metrics are not met: {incomplete_metrics}")
+    return errors
 
 
 def acceptance_requirement_errors(loop: dict) -> list[str]:
@@ -1487,6 +1579,10 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             f"{loop.get('loop_id')}: {error}"
             for error in knowledge_state_errors(loop)
         )
+        errors.extend(
+            f"{loop.get('loop_id')}: {error}"
+            for error in learning_control_errors(root, loop)
+        )
         gate_ids = set()
         if loop.get("state") not in {"draft", "clarifying", "awaiting_requirement_confirmation"}:
             gate_ids.add("requirement_confirmation")
@@ -1669,6 +1765,8 @@ def base_loop(
         "assumptions": [],
         "decision_records": [],
         "knowledge_state": empty_knowledge_state(),
+        "quality_metrics": [],
+        "failure_memory": [],
         "prototype": {
             "implementation_basis": False,
             "type": None,
@@ -2063,6 +2161,8 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
         "assumptions" in loop
         and "decision_records" in loop
         and "knowledge_state" in loop
+        and "quality_metrics" in loop
+        and "failure_memory" in loop
         and "risk_driver" in routing
         and (risk_driver is None or "secondary_risks" in risk_driver)
     )
@@ -2081,6 +2181,8 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     loop.setdefault("assumptions", [])
     loop.setdefault("decision_records", [])
     loop.setdefault("knowledge_state", empty_knowledge_state())
+    loop.setdefault("quality_metrics", [])
+    loop.setdefault("failure_memory", [])
     profile = loop["execution_profile"]
     profile["status"] = "provisional"
     profile["qualifications"] = {
@@ -2266,6 +2368,11 @@ def context_projection(root: Path, path: Path, loop: dict, subflow_id: str | Non
         "decision_records": loop.get("decision_records", []),
         "knowledge_state": projected_knowledge,
     }
+    if phase in {"requirements", "verification", "completion", "recovery"}:
+        result["learning_control"] = {
+            "quality_metrics": loop.get("quality_metrics", []),
+            "failure_memory": loop.get("failure_memory", []),
+        }
 
     acceptance = acceptance_context(loop, subflow_id)
     if phase == "requirements":
@@ -2709,6 +2816,126 @@ def cmd_knowledge(args: argparse.Namespace) -> None:
         write_control_snapshot(root, loop)
 
 
+def cmd_quality_metric(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    metrics = loop.setdefault("quality_metrics", [])
+    item = next((value for value in metrics if value["metric_id"] == args.metric_id), None)
+    if item is None and (
+        not args.name or not args.unit or args.operator is None or args.target is None
+    ):
+        raise ValueError("new quality metric requires --name, --unit, --operator, and --target")
+    target = {
+        "operator": args.operator or item["target"]["operator"],
+        "value": args.target if args.target is not None else item["target"]["value"],
+    }
+    actual = args.actual if args.actual is not None else (item or {}).get("actual")
+    evidence = args.evidence if args.evidence is not None else (item or {}).get("evidence", [])
+    status = metric_status(target["operator"], target["value"], actual)
+    if status != "pending" and not evidence:
+        raise ValueError("measured quality metric requires at least one --evidence")
+    value = {
+        "metric_id": args.metric_id,
+        "name": args.name or item["name"],
+        "unit": args.unit or item["unit"],
+        "baseline": args.baseline if args.baseline is not None else (item or {}).get("baseline"),
+        "target": target,
+        "actual": actual,
+        "required": args.required if args.required is not None else (item or {}).get("required", True),
+        "status": status,
+        "evidence": list(dict.fromkeys(evidence)),
+        "owner": args.actor,
+        "updated_at": now(),
+    }
+    if item is None:
+        metrics.append(value)
+    else:
+        item.clear()
+        item.update(value)
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"quality metric invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_failure_memory(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    records = loop.setdefault("failure_memory", [])
+    item = next((value for value in records if value["failure_id"] == args.failure_id), None)
+    if item is None and (
+        not args.evidence_id or not args.mistake or not args.actual_reason or not args.prevention
+    ):
+        raise ValueError(
+            "new failure memory requires --evidence-id, --mistake, --actual-reason, and --prevention"
+        )
+    evidence_path = loop_dir(root, args.loop_id) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    runs = {run.get("evidence_id"): run for run in evidence.get("runs", [])}
+    evidence_id = args.evidence_id or item["evidence_id"]
+    if evidence_id not in runs or runs[evidence_id].get("result") != "failed":
+        raise ValueError("failure memory requires an existing failed --evidence-id")
+    assumption_ids = args.assumption_id if args.assumption_id is not None else (item or {}).get("assumption_ids", [])
+    decision_ids = args.decision_id if args.decision_id is not None else (item or {}).get("decision_ids", [])
+    metric_ids = args.metric_id if args.metric_id is not None else (item or {}).get("metric_ids", [])
+    unlinked_reason = (
+        args.unlinked_reason if args.unlinked_reason is not None
+        else (item or {}).get("unlinked_reason")
+    )
+    if not assumption_ids and not decision_ids and not unlinked_reason:
+        raise ValueError("failure memory requires an assumption/decision link or --unlinked-reason")
+    status = args.status or (item or {}).get("status", "open")
+    verification_evidence = (
+        args.verification_evidence
+        if args.verification_evidence is not None
+        else (item or {}).get("verification_evidence", [])
+    )
+    if status == "open":
+        verification_evidence = []
+    elif not verification_evidence:
+        raise ValueError("verified prevention requires --verification-evidence")
+    value = {
+        "failure_id": args.failure_id,
+        "evidence_id": evidence_id,
+        "mistake": args.mistake or item["mistake"],
+        "actual_reason": args.actual_reason or item["actual_reason"],
+        "prevention": args.prevention or item["prevention"],
+        "assumption_ids": list(dict.fromkeys(assumption_ids)),
+        "decision_ids": list(dict.fromkeys(decision_ids)),
+        "metric_ids": list(dict.fromkeys(metric_ids)),
+        "unlinked_reason": unlinked_reason,
+        "status": status,
+        "verification_evidence": list(dict.fromkeys(verification_evidence)),
+        "actor": args.actor,
+        "recorded_at": (item or {}).get("recorded_at", now()),
+        "updated_at": now(),
+    }
+    if item is None:
+        records.append(value)
+    else:
+        item.clear()
+        item.update(value)
+    loop["updated_at"] = now()
+    semantic_errors = learning_control_errors(root, loop)
+    if semantic_errors:
+        raise ValueError("; ".join(semantic_errors))
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"failure memory invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
 def cmd_acceptance_plan(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
@@ -3068,6 +3295,8 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
         blocked_knowledge = blocking_knowledge_ids(loop, knowledge_impacts)
         if blocked_knowledge:
             errors.append(f"transition has unresolved knowledge: {blocked_knowledge}")
+    if target in {"verified", "done"}:
+        errors.extend(learning_control_errors(root, loop, completion=True))
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
@@ -3867,6 +4096,38 @@ def parser() -> argparse.ArgumentParser:
     knowledge.add_argument("--resolution")
     knowledge.add_argument("--evidence", action="append")
     knowledge.set_defaults(func=cmd_knowledge)
+
+    quality_metric = commands.add_parser("quality-metric")
+    quality_metric.add_argument("loop_id")
+    quality_metric.add_argument("--metric-id", required=True)
+    quality_metric.add_argument("--actor", required=True)
+    quality_metric.add_argument("--name")
+    quality_metric.add_argument("--unit")
+    quality_metric.add_argument("--baseline", type=float)
+    quality_metric.add_argument("--operator", choices=["gte", "lte", "eq"])
+    quality_metric.add_argument("--target", type=float)
+    quality_metric.add_argument("--actual", type=float)
+    metric_requirement = quality_metric.add_mutually_exclusive_group()
+    metric_requirement.add_argument("--required", dest="required", action="store_true", default=None)
+    metric_requirement.add_argument("--optional", dest="required", action="store_false")
+    quality_metric.add_argument("--evidence", action="append")
+    quality_metric.set_defaults(func=cmd_quality_metric)
+
+    failure_memory = commands.add_parser("failure-memory")
+    failure_memory.add_argument("loop_id")
+    failure_memory.add_argument("--failure-id", required=True)
+    failure_memory.add_argument("--actor", required=True)
+    failure_memory.add_argument("--evidence-id")
+    failure_memory.add_argument("--mistake")
+    failure_memory.add_argument("--actual-reason")
+    failure_memory.add_argument("--prevention")
+    failure_memory.add_argument("--assumption-id", action="append")
+    failure_memory.add_argument("--decision-id", action="append")
+    failure_memory.add_argument("--metric-id", action="append")
+    failure_memory.add_argument("--unlinked-reason")
+    failure_memory.add_argument("--status", choices=["open", "prevention_verified"])
+    failure_memory.add_argument("--verification-evidence", action="append")
+    failure_memory.set_defaults(func=cmd_failure_memory)
 
     acceptance_plan = commands.add_parser("acceptance-plan")
     acceptance_plan.add_argument("loop_id")

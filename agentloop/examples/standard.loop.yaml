@@ -42,6 +42,8 @@ acceptance_obligations:
 assumptions: []
 decision_records: []
 knowledge_state: {known: [], unknowns: [], conflicts: []}
+quality_metrics: []
+failure_memory: []
 scope:
   claim: active
   claimed_at: "2026-07-30T11:00:00+08:00"

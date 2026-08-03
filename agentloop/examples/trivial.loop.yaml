@@ -43,6 +43,8 @@ acceptance_obligations:
 assumptions: []
 decision_records: []
 knowledge_state: {known: [], unknowns: [], conflicts: []}
+quality_metrics: []
+failure_memory: []
 scope:
   claim: released
   claimed_at: "2026-07-30T10:00:00+08:00"

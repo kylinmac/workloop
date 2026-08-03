@@ -65,6 +65,13 @@ def main() -> None:
                 assert projected_ids == {"KNO-01", "KNO-02"}
             if phase == "completion":
                 assert projected_ids == {"KNO-02"}
+            if phase in {"requirements", "verification", "completion", "recovery"}:
+                assert context["learning_control"] == {
+                    "quality_metrics": [],
+                    "failure_memory": [],
+                }
+            else:
+                assert "learning_control" not in context
 
         path = root / "loop.yaml"
         engine.atomic_yaml(path, base)
