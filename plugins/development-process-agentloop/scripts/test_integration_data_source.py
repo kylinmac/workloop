@@ -45,6 +45,15 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
+        loop["collaboration_contract"].update({
+            "required": False,
+            "reason": "数据链路门禁测试没有多 Agent 协作",
+            "file": None,
+            "status": "not_required",
+            "digest": None,
+            "consumers": [],
+            "confirmed_by": [],
+        })
         loop["classification"].update({
             "control_version": 2,
             "primary_type": "内部改进",

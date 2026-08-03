@@ -45,6 +45,7 @@ decision_records: []
 knowledge_state: {known: [], unknowns: [], conflicts: []}
 quality_metrics: []
 failure_memory: []
+collaboration_contract: {required: false, reason: 单 Agent 局部交付, file: null, status: not_required, digest: null, consumers: [], confirmed_by: [], updated_at: "2026-07-30T10:00:00+08:00"}
 scope:
   claim: released
   claimed_at: "2026-07-30T10:00:00+08:00"

@@ -140,6 +140,7 @@
     "failure_memory": {"type": "array", "items": {"$ref": "#/$defs/failure_record"}},
     "prototype": {"$ref": "#/$defs/prototype"},
     "integration_data": {"$ref": "#/$defs/integration_data"},
+    "collaboration_contract": {"$ref": "#/$defs/collaboration_contract"},
     "scope": {"$ref": "#/$defs/scope"},
     "gates": {
       "type": "object",
@@ -161,6 +162,7 @@
         "development": {"type": "string"},
         "evidence": {"type": "string"},
         "development_assurance": {"type": "string"},
+        "development_contract": {"type": "string"},
         "prototype_behavior_inventory": {"type": "string"},
         "prototype_matrix": {"type": "string"},
         "user_flow_slices": {"type": "string"},
@@ -501,6 +503,57 @@
           }
         }
       }]
+    },
+    "collaboration_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "reason", "file", "status", "digest", "consumers", "confirmed_by", "updated_at"],
+      "properties": {
+        "required": {"type": ["boolean", "null"]},
+        "reason": {"type": "string", "minLength": 1},
+        "file": {"type": ["string", "null"]},
+        "status": {"enum": ["pending", "not_required", "draft", "confirmed"]},
+        "digest": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "consumers": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "confirmed_by": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"required": {"const": true}}},
+          "then": {
+            "properties": {
+              "file": {"type": "string", "minLength": 1},
+              "status": {"enum": ["draft", "confirmed"]},
+              "consumers": {"minItems": 2}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"required": {"const": false}}},
+          "then": {
+            "properties": {
+              "file": {"type": "null"},
+              "status": {"const": "not_required"},
+              "digest": {"type": "null"},
+              "consumers": {"maxItems": 0},
+              "confirmed_by": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"required": {"type": "null"}}},
+          "then": {
+            "properties": {
+              "file": {"type": "null"},
+              "status": {"const": "pending"},
+              "digest": {"type": "null"},
+              "consumers": {"maxItems": 0},
+              "confirmed_by": {"maxItems": 0}
+            }
+          }
+        }
+      ]
     },
     "prototype": {
       "type": "object",

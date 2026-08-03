@@ -34,6 +34,15 @@ def write_yaml(path: Path, value: dict) -> None:
 def set_v2(
     loop: dict, acceptance_id: str, flow_id: str, executor: str, subflow_id: str | None = None
 ) -> None:
+    loop["collaboration_contract"].update({
+        "required": False,
+        "reason": "生产原型门禁测试没有跨 Agent 共享边界",
+        "file": None,
+        "status": "not_required",
+        "digest": None,
+        "consumers": [],
+        "confirmed_by": [],
+    })
     loop["classification"].update({
         "control_version": 2,
         "primary_type": "内部改进",

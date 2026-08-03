@@ -21,6 +21,7 @@ INTEGRATION_DATA_TEST = Path(__file__).with_name("test_integration_data_source.p
 PRODUCTION_PROTOTYPE_TEST = Path(__file__).with_name("test_production_prototype_gate.py")
 CONTEXT_PROJECTION_TEST = Path(__file__).with_name("test_context_projection.py")
 REASONING_CONTROLS_TEST = Path(__file__).with_name("test_reasoning_controls.py")
+COLLABORATION_CONTRACT_TEST = Path(__file__).with_name("test_collaboration_contract.py")
 HOOKS = ENGINE.parents[1] / "hooks" / "hooks.json"
 SKILLS = ENGINE.parents[1] / "skills"
 
@@ -79,6 +80,7 @@ def main() -> None:
     subprocess.run(["python3", str(SYNC_REFERENCES), "verify"], check=True)
     subprocess.run(["python3", str(CONTEXT_PROJECTION_TEST)], check=True)
     subprocess.run(["python3", str(REASONING_CONTROLS_TEST)], check=True)
+    subprocess.run(["python3", str(COLLABORATION_CONTRACT_TEST)], check=True)
     system_python = Path("/usr/bin/python3")
     if system_python.exists():
         subprocess.run([str(system_python), str(ENGINE), "doctor"], check=True)
@@ -212,6 +214,10 @@ def main() -> None:
             "requirement-agent",
             "--reason",
             "已记录原始需求",
+        )
+        run(
+            root, "contract-declare", loop_id, "--actor", "requirement-agent",
+            "--not-required", "--reason", "单 Agent 文案修改没有共享开发边界",
         )
         requirement_patch = subprocess.run(
             ["python3", str(ENGINE), "--root", str(root), "hook", "pre-tool"],
@@ -586,6 +592,7 @@ def main() -> None:
         legacy_loop.pop("knowledge_state")
         legacy_loop.pop("quality_metrics")
         legacy_loop.pop("failure_memory")
+        legacy_loop.pop("collaboration_contract")
         legacy_loop["routing"].pop("risk_driver")
         legacy_path.write_text(yaml.safe_dump(legacy_loop, allow_unicode=True, sort_keys=False))
         legacy_validation = subprocess.run(
@@ -604,6 +611,8 @@ def main() -> None:
         assert migrated["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
         assert migrated["quality_metrics"] == []
         assert migrated["failure_memory"] == []
+        assert migrated["collaboration_contract"]["required"] is None
+        assert migrated["collaboration_contract"]["status"] == "pending"
         assert migrated["routing"]["risk_driver"] is None
         assert migrated["routing"]["status"] == "pending"
         run(
@@ -627,6 +636,7 @@ def main() -> None:
         reasoning_loop.pop("knowledge_state")
         reasoning_loop.pop("quality_metrics")
         reasoning_loop.pop("failure_memory")
+        reasoning_loop.pop("collaboration_contract")
         reasoning_loop["routing"].pop("risk_driver")
         reasoning_path.write_text(
             yaml.safe_dump(reasoning_loop, allow_unicode=True, sort_keys=False)
@@ -648,6 +658,7 @@ def main() -> None:
         assert migrated_reasoning["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
         assert migrated_reasoning["quality_metrics"] == []
         assert migrated_reasoning["failure_memory"] == []
+        assert migrated_reasoning["collaboration_contract"]["required"] is None
         assert migrated_reasoning["routing"]["risk_driver"] is None
         run(
             root, "transition", reasoning_legacy, "cancelled",
@@ -721,6 +732,15 @@ def main() -> None:
                     "baseline", "metric", "target", "external-invariants", "allowed-scope"
                 ), 1)
             ],
+        })
+        assured_loop["collaboration_contract"].update({
+            "required": False,
+            "reason": "单 Agent 根因修复没有共享开发边界",
+            "file": None,
+            "status": "not_required",
+            "digest": None,
+            "consumers": [],
+            "confirmed_by": [],
         })
         assured_loop["acceptance_obligations"] = [
             {
