@@ -48,6 +48,66 @@ def main() -> None:
 
         loop_id = succeed(root, "init", "--title", "推理控制负向测试", "--level", "standard")
         loop_path = root / ".agentloop" / "loops" / loop_id / "loop.yaml"
+        loop = yaml.safe_load(loop_path.read_text())
+        assert loop["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
+
+        fail(
+            root,
+            "known knowledge requires at least one --source",
+            "knowledge", loop_id, "--knowledge-id", "KNO-01", "--kind", "known",
+            "--actor", "tester", "--statement", "接口存在", "--impact", "implementation",
+        )
+        succeed(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-01", "--kind", "known",
+            "--actor", "tester", "--statement", "接口存在", "--impact", "implementation",
+            "--source", "api/openapi.yaml",
+        )
+        succeed(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-02", "--kind", "unknown",
+            "--actor", "tester", "--statement", "部署环境是否支持该接口",
+            "--impact", "routing",
+        )
+        fail(
+            root,
+            "resolved knowledge requires --resolution and --evidence",
+            "knowledge", loop_id, "--knowledge-id", "KNO-02", "--kind", "unknown",
+            "--actor", "tester", "--status", "resolved", "--resolution", "支持",
+        )
+        succeed(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-02", "--kind", "unknown",
+            "--actor", "tester", "--status", "resolved", "--resolution", "支持",
+            "--evidence", "环境探测日志",
+        )
+        fail(
+            root,
+            "conflicting knowledge requires at least two --source-claim values",
+            "knowledge", loop_id, "--knowledge-id", "KNO-03", "--kind", "conflict",
+            "--actor", "tester", "--statement", "字段是否允许为空", "--impact", "acceptance",
+            "--source-claim", '{"source":"schema","claim":"允许"}',
+        )
+        succeed(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-03", "--kind", "conflict",
+            "--actor", "tester", "--statement", "字段是否允许为空", "--impact", "acceptance",
+            "--source-claim", '{"source":"schema","claim":"允许"}',
+            "--source-claim", '{"source":"runtime","claim":"拒绝"}',
+        )
+        fail(
+            root,
+            "knowledge_id already exists with a different kind",
+            "knowledge", loop_id, "--knowledge-id", "KNO-03", "--kind", "known",
+            "--actor", "tester", "--statement", "冲突", "--impact", "acceptance",
+            "--source", "test",
+        )
+        succeed(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-03", "--kind", "conflict",
+            "--actor", "tester", "--status", "resolved", "--resolution", "运行时行为为准",
+            "--evidence", "回归测试",
+        )
 
         fail(
             root,
@@ -76,6 +136,8 @@ def main() -> None:
         )
         loop = yaml.safe_load(loop_path.read_text())
         assert loop["assumptions"][0]["status"] == "unverified"
+        assert loop["knowledge_state"]["unknowns"][0]["status"] == "resolved"
+        assert loop["knowledge_state"]["conflicts"][0]["status"] == "resolved"
 
         fail(
             root,

@@ -32,6 +32,14 @@ def project(root: Path, base: dict, state: str) -> dict:
 
 def main() -> None:
     base = engine.load_yaml(PLUGIN_ROOT / "references" / "agentloop" / "examples" / "composite.loop.yaml")
+    base["knowledge_state"] = {
+        "known": [
+            {"knowledge_id": "KNO-01", "statement": "实现事实", "impact": "implementation", "sources": ["code"], "owner": "test", "updated_at": "2026-08-03T00:00:00+00:00"},
+            {"knowledge_id": "KNO-02", "statement": "验证事实", "impact": "verification", "sources": ["test"], "owner": "test", "updated_at": "2026-08-03T00:00:00+00:00"},
+        ],
+        "unknowns": [],
+        "conflicts": [],
+    }
     cases = {
         "clarifying": ("requirements", {"git", "routing", "evidence", "transitions", "gate_events"}),
         "developing": ("development", {"classification", "evidence", "transitions", "gate_events"}),
@@ -47,6 +55,16 @@ def main() -> None:
             assert context["phase"] == phase
             assert context["phase_skill"] == f"development-process-agentloop:agentloop-{phase}"
             assert not forbidden & context.keys(), (state, forbidden & context.keys())
+            projected_ids = {
+                item["knowledge_id"]
+                for item in context["reasoning_control"]["knowledge_state"]["known"]
+            }
+            if phase == "development":
+                assert projected_ids == {"KNO-01"}
+            if phase == "verification":
+                assert projected_ids == {"KNO-01", "KNO-02"}
+            if phase == "completion":
+                assert projected_ids == {"KNO-02"}
 
         path = root / "loop.yaml"
         engine.atomic_yaml(path, base)
