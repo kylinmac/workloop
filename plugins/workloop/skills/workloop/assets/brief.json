@@ -1,0 +1,15 @@
+{
+  "protocol_version": "0.1",
+  "task_id": "TASK-001",
+  "title": "Replace with the task title",
+  "state": "draft",
+  "intent": {
+    "goal": "Replace with the observable outcome",
+    "in_scope": [],
+    "out_of_scope": [],
+    "constraints": []
+  },
+  "acceptance": [],
+  "cognition": [],
+  "risks": []
+}

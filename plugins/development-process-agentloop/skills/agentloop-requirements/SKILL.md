@@ -23,8 +23,14 @@ Required outcome:
   qualifications before confirmation;
 - declare whether prototypes are implementation bases and whether database →
   API → UI lineage applies;
+- explicitly declare whether multiple Agents share an API, data, behavior, or
+  acceptance boundary with `contract-declare`;
 - replace vague acceptance such as “按原型实现” with independently checkable
-  criteria.
+criteria.
+
+When a collaboration contract is required, identify every consumer before the
+requirement Gate. Contract content is prepared and confirmed before coding;
+do not let participants infer separate API or field meanings.
 
 Move `draft → clarifying`, then
 `clarifying → awaiting_requirement_confirmation` through `transition`. At the

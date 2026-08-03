@@ -29,5 +29,10 @@ commit permits `verifying → verified` or subflow `verifying → passed`. On
 failure, stale only affected Evidence and return to the narrowest development
 state.
 
+When a collaboration contract is required, the generated test report must
+include `contract_consistency` for every contract ID, both provider and
+consumer implementation paths, all declared participants, the confirmed
+digest, and zero semantic violations.
+
 Do not load classification details, Gate event history, unrelated executors,
 or parent integration details.

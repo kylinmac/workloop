@@ -20,6 +20,8 @@ PROTOTYPE_FIDELITY_TEST = Path(__file__).with_name("test_prototype_fidelity.py")
 INTEGRATION_DATA_TEST = Path(__file__).with_name("test_integration_data_source.py")
 PRODUCTION_PROTOTYPE_TEST = Path(__file__).with_name("test_production_prototype_gate.py")
 CONTEXT_PROJECTION_TEST = Path(__file__).with_name("test_context_projection.py")
+REASONING_CONTROLS_TEST = Path(__file__).with_name("test_reasoning_controls.py")
+COLLABORATION_CONTRACT_TEST = Path(__file__).with_name("test_collaboration_contract.py")
 HOOKS = ENGINE.parents[1] / "hooks" / "hooks.json"
 SKILLS = ENGINE.parents[1] / "skills"
 
@@ -77,6 +79,8 @@ def git(root: Path, *args: str) -> None:
 def main() -> None:
     subprocess.run(["python3", str(SYNC_REFERENCES), "verify"], check=True)
     subprocess.run(["python3", str(CONTEXT_PROJECTION_TEST)], check=True)
+    subprocess.run(["python3", str(REASONING_CONTROLS_TEST)], check=True)
+    subprocess.run(["python3", str(COLLABORATION_CONTRACT_TEST)], check=True)
     system_python = Path("/usr/bin/python3")
     if system_python.exists():
         subprocess.run([str(system_python), str(ENGINE), "doctor"], check=True)
@@ -210,6 +214,10 @@ def main() -> None:
             "requirement-agent",
             "--reason",
             "已记录原始需求",
+        )
+        run(
+            root, "contract-declare", loop_id, "--actor", "requirement-agent",
+            "--not-required", "--reason", "单 Agent 文案修改没有共享开发边界",
         )
         requirement_patch = subprocess.run(
             ["python3", str(ENGINE), "--root", str(root), "hook", "pre-tool"],
@@ -355,6 +363,37 @@ def main() -> None:
         )
         run(
             root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-10", "--kind", "unknown",
+            "--actor", "requirement-agent", "--statement", "目标页面是否仍使用该文案",
+            "--impact", "routing",
+        )
+        blocked_route = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "route", loop_id,
+                "--actor", "development-agent", "--confidence", "high",
+                "--main-flow", "quick-change", "--reason", "位置和影响明确",
+                "--risk-category", "localized-change", "--risk-statement", "局部回归",
+                "--risk-evidence", "单文件范围", "--risk-severity", "low",
+                "--verification", "self_check", "--verification-reason", "直接观察",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert blocked_route.returncode != 0 and "unresolved knowledge" in blocked_route.stderr
+        run(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-10", "--kind", "unknown",
+            "--actor", "requirement-agent", "--status", "resolved",
+            "--resolution", "仍使用", "--evidence", "页面路由检查",
+        )
+        run(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-11", "--kind", "unknown",
+            "--actor", "development-agent", "--statement", "目标文件采用哪种编码",
+            "--impact", "implementation",
+        )
+        run(
+            root,
             "route",
             loop_id,
             "--actor",
@@ -365,10 +404,51 @@ def main() -> None:
             "quick-change",
             "--reason",
             "位置和影响明确",
+            "--risk-category", "localized-change",
+            "--risk-statement", "变更范围局限且主要风险是局部回归",
+            "--risk-evidence", "已确认的单文件范围和验收映射",
+            "--risk-severity", "low",
+            "--secondary-risk", json.dumps({
+                "category": "user-experience",
+                "statement": "文案变化可能影响页面表达",
+                "evidence": "README 是用户可见入口",
+                "severity": "low",
+                "handling": "supporting_flow",
+            }, ensure_ascii=False),
+            "--secondary-risk", json.dumps({
+                "category": "technical-feasibility",
+                "statement": "系统 Python 环境必须可运行",
+                "evidence": "插件声明为自包含运行时",
+                "severity": "low",
+                "handling": "verification_obligation",
+                "verification_obligation": "使用 /usr/bin/python3 执行 doctor",
+            }, ensure_ascii=False),
             "--verification",
             "self_check",
             "--verification-reason",
             "结果可直接观察",
+        )
+        routed = yaml.safe_load(loop_path.read_text())
+        assert len(routed["routing"]["risk_driver"]["secondary_risks"]) == 2
+        assert "product-prototype" in routed["routing"]["development"]["supporting_flows"]
+        blocked_development = subprocess.run(
+            [
+                "python3", str(ENGINE), "--root", str(root), "transition", loop_id,
+                "development_preparing", "--actor", "development-agent",
+                "--reason", "实现未知项尚未解决",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert (
+            blocked_development.returncode != 0
+            and "unresolved knowledge" in blocked_development.stderr
+        )
+        run(
+            root,
+            "knowledge", loop_id, "--knowledge-id", "KNO-11", "--kind", "unknown",
+            "--actor", "development-agent", "--status", "resolved",
+            "--resolution", "UTF-8", "--evidence", "文件编码检查",
         )
         run(
             root,
@@ -410,6 +490,8 @@ def main() -> None:
                 "python3", str(ENGINE), "--root", str(root), "route", loop_id,
                 "--actor", "development-agent", "--confidence", "high",
                 "--main-flow", "quick-change", "--reason", "illegal reroute",
+                "--risk-category", "localized-change", "--risk-statement", "local",
+                "--risk-evidence", "scope", "--risk-severity", "low",
                 "--verification", "self_check", "--verification-reason", "illegal",
             ],
             text=True,
@@ -505,6 +587,13 @@ def main() -> None:
         legacy_loop = yaml.safe_load(legacy_path.read_text())
         legacy_loop["classification"]["control_version"] = 1
         legacy_loop.pop("acceptance_obligations")
+        legacy_loop.pop("assumptions")
+        legacy_loop.pop("decision_records")
+        legacy_loop.pop("knowledge_state")
+        legacy_loop.pop("quality_metrics")
+        legacy_loop.pop("failure_memory")
+        legacy_loop.pop("collaboration_contract")
+        legacy_loop["routing"].pop("risk_driver")
         legacy_path.write_text(yaml.safe_dump(legacy_loop, allow_unicode=True, sort_keys=False))
         legacy_validation = subprocess.run(
             ["python3", str(ENGINE), "--root", str(root), "validate"],
@@ -517,6 +606,15 @@ def main() -> None:
         assert migrated["state"] == "clarifying"
         assert migrated["classification"]["control_version"] == 2
         assert migrated["acceptance_obligations"] == []
+        assert migrated["assumptions"] == []
+        assert migrated["decision_records"] == []
+        assert migrated["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
+        assert migrated["quality_metrics"] == []
+        assert migrated["failure_memory"] == []
+        assert migrated["collaboration_contract"]["required"] is None
+        assert migrated["collaboration_contract"]["status"] == "pending"
+        assert migrated["routing"]["risk_driver"] is None
+        assert migrated["routing"]["status"] == "pending"
         run(
             root, "transition", legacy, "cancelled",
             "--actor", "loop-coordinator", "--reason", "迁移回归完成",
@@ -527,6 +625,45 @@ def main() -> None:
             (ENGINE.parents[1] / "references" / "agentloop" / "schemas" / "loop.schema.json").read_text()
         )
         assert not list(Validator(loop_schema).iter_errors(terminal_history))
+
+        reasoning_legacy = run(
+            root, "init", "--title", "旧推理控制 Loop", "--level", "standard"
+        )
+        reasoning_path = root / ".agentloop" / "loops" / reasoning_legacy / "loop.yaml"
+        reasoning_loop = yaml.safe_load(reasoning_path.read_text())
+        reasoning_loop.pop("assumptions")
+        reasoning_loop.pop("decision_records")
+        reasoning_loop.pop("knowledge_state")
+        reasoning_loop.pop("quality_metrics")
+        reasoning_loop.pop("failure_memory")
+        reasoning_loop.pop("collaboration_contract")
+        reasoning_loop["routing"].pop("risk_driver")
+        reasoning_path.write_text(
+            yaml.safe_dump(reasoning_loop, allow_unicode=True, sort_keys=False)
+        )
+        reasoning_validation = subprocess.run(
+            ["python3", str(ENGINE), "--root", str(root), "validate"],
+            text=True,
+            capture_output=True,
+        )
+        assert (
+            reasoning_validation.returncode != 0
+            and "reasoning control fields require `agentloop migrate-v2`"
+            in reasoning_validation.stderr
+        )
+        run(root, "migrate-v2", reasoning_legacy, "--actor", "loop-coordinator")
+        migrated_reasoning = yaml.safe_load(reasoning_path.read_text())
+        assert migrated_reasoning["assumptions"] == []
+        assert migrated_reasoning["decision_records"] == []
+        assert migrated_reasoning["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
+        assert migrated_reasoning["quality_metrics"] == []
+        assert migrated_reasoning["failure_memory"] == []
+        assert migrated_reasoning["collaboration_contract"]["required"] is None
+        assert migrated_reasoning["routing"]["risk_driver"] is None
+        run(
+            root, "transition", reasoning_legacy, "cancelled",
+            "--actor", "loop-coordinator", "--reason", "推理迁移回归完成",
+        )
 
         composite = run(
             root,
@@ -595,6 +732,15 @@ def main() -> None:
                     "baseline", "metric", "target", "external-invariants", "allowed-scope"
                 ), 1)
             ],
+        })
+        assured_loop["collaboration_contract"].update({
+            "required": False,
+            "reason": "单 Agent 根因修复没有共享开发边界",
+            "file": None,
+            "status": "not_required",
+            "digest": None,
+            "consumers": [],
+            "confirmed_by": [],
         })
         assured_loop["acceptance_obligations"] = [
             {

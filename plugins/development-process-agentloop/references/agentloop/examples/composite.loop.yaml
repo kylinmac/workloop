@@ -45,6 +45,12 @@ acceptance_obligations:
     required: true
     implementation_paths: [src/payment/**]
     verification: {flow_id: null, check_id: payment-reversal, executor: code, subflow_id: sf-02-payment}
+assumptions: []
+decision_records: []
+knowledge_state: {known: [], unknowns: [], conflicts: []}
+quality_metrics: []
+failure_memory: []
+collaboration_contract: {required: false, reason: 示例切片没有共享接口, file: null, status: not_required, digest: null, consumers: [], confirmed_by: [], updated_at: "2026-07-30T10:00:00+08:00"}
 scope:
   claim: active
   claimed_at: "2026-07-30T12:00:00+08:00"

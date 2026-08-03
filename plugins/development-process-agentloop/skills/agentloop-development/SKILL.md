@@ -22,6 +22,12 @@ inventory, implementation matrix, user-flow slices, API contract, and data
 model/reuse declaration before coding. Other non-trivial routes use
 `development-assurance.yaml`.
 
+When `collaboration_contract.required` is true, load the projected
+`development_contract`, confirm it before entering development, and implement
+only its shared API, data semantics, behavior, and acceptance scenarios. If it
+is wrong or incomplete, update and reconfirm the contract; never infer a local
+variant for one participant.
+
 In `developing`, implement the confirmed acceptance obligations, run focused
 checks, and create a traceable commit. Frontend business data must come from
 formal APIs; backend data that belongs in a database must be queried there.

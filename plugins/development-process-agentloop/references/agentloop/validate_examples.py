@@ -1,18 +1,26 @@
 from copy import deepcopy
 from json import loads
 from pathlib import Path
+import sys
 
 import yaml
-from jsonschema import Draft202012Validator, FormatChecker
-
 
 ROOT = Path(__file__).parent
+try:
+    from jsonschema import Draft202012Validator, FormatChecker
+except ImportError:
+    scripts = ROOT.parent / "plugins" / "development-process-agentloop" / "scripts"
+    sys.path.insert(0, str(scripts))
+    from schema_validation import Validator as Draft202012Validator
+    FormatChecker = None
+
 CASES = {
     "project.schema.json": ["project.yaml"],
     "flow.schema.json": ["flow.yaml", "ui-visual.flow.yaml"],
     "evidence.schema.json": ["evidence.yaml", "ui-visual.evidence.yaml"],
     "prototype-matrix.schema.json": ["prototype-matrix.yaml"],
     "development-assurance.schema.json": ["development-assurance.yaml"],
+    "development-contract.schema.json": ["development-contract.yaml"],
     "loop.schema.json": [
         "trivial.loop.yaml",
         "standard.loop.yaml",
@@ -27,7 +35,10 @@ def main() -> None:
     for schema_name, examples in CASES.items():
         schema = loads((ROOT / "schemas" / schema_name).read_text())
         Draft202012Validator.check_schema(schema)
-        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        validator = (
+            Draft202012Validator(schema, format_checker=FormatChecker())
+            if FormatChecker else Draft202012Validator(schema)
+        )
         for example in examples:
             data = yaml.safe_load((ROOT / "examples" / example).read_text())
             errors = sorted(validator.iter_errors(data), key=lambda error: list(error.path))

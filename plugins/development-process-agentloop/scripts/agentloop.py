@@ -21,6 +21,9 @@ from datetime import datetime
 from pathlib import Path
 
 VENDOR_ROOT = Path(__file__).resolve().parents[1] / "vendor"
+SCRIPT_ROOT = Path(__file__).resolve().parent
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
 if VENDOR_ROOT.is_dir():
     sys.path.insert(0, str(VENDOR_ROOT))
 
@@ -98,6 +101,17 @@ ROUTE_ASSURANCE_OBLIGATIONS = {
     "root-cause": {"reproduction", "failing-regression"},
     "migration-compatibility": {"inventory", "compatibility", "rollback-or-approval"},
     "technical-validation": {"hypothesis", "thresholds", "experiment"},
+}
+RISK_FLOW_MAP = {
+    "localized-change": "quick-change",
+    "user-experience": "product-prototype",
+    "business-workflow": "business-process",
+    "data-contract": "data-contract",
+    "domain-rules": "domain-model",
+    "system-boundary": "architecture",
+    "root-cause": "root-cause",
+    "migration-compatibility": "migration-compatibility",
+    "technical-feasibility": "technical-validation",
 }
 
 STATE_PHASES = {
@@ -223,8 +237,15 @@ def controlled_payload(root: Path, loop: dict) -> dict:
             key: loop.get(key)
             for key in (
                 "classification", "acceptance_obligations", "execution_profile",
-                "prototype", "integration_data",
+                "prototype", "integration_data", "collaboration_contract",
             )
+        }
+        payload["reasoning_control"] = {
+            "assumptions": loop.get("assumptions", []),
+            "decision_records": loop.get("decision_records", []),
+            "knowledge_state": loop.get("knowledge_state", empty_knowledge_state()),
+            "quality_metrics": loop.get("quality_metrics", []),
+            "failure_memory": loop.get("failure_memory", []),
         }
     development_states = {
         "development_preparing", "developing", "ready_for_verification",
@@ -472,6 +493,86 @@ def integration_data_declaration_errors(loop: dict) -> list[str]:
     return []
 
 
+def collaboration_contract_declaration_errors(loop: dict) -> list[str]:
+    declaration = loop.get("collaboration_contract")
+    if not isinstance(declaration, dict) or not isinstance(declaration.get("required"), bool):
+        return ["collaboration contract requirement must be explicitly declared"]
+    return []
+
+
+def collaboration_contract_errors(root: Path, loop: dict) -> list[str]:
+    declaration_errors = collaboration_contract_declaration_errors(loop)
+    if declaration_errors:
+        return declaration_errors
+    declaration = loop["collaboration_contract"]
+    if not declaration["required"]:
+        return []
+    errors = []
+    if declaration.get("status") != "confirmed":
+        errors.append("collaboration contract is not confirmed")
+    relative = declaration.get("file")
+    contract_path = project_file(root, relative) if relative else None
+    if contract_path is None or not contract_path.is_file():
+        return errors + [f"collaboration contract does not exist: {relative}"]
+    try:
+        contract = load_yaml(contract_path)
+    except (ValueError, OSError) as error:
+        return errors + [f"collaboration contract cannot be read: {error}"]
+    schema_errors = list(schema_validator("development-contract.schema.json").iter_errors(contract))
+    if schema_errors:
+        errors.append(
+            f"collaboration contract invalid at {schema_errors[0].json_path}: {schema_errors[0].message}"
+        )
+        return errors
+    if contract["loop_id"] != loop["loop_id"]:
+        errors.append("collaboration contract loop_id does not match")
+    if contract["requirement_version"] != loop["requirement_version"]:
+        errors.append("collaboration contract requirement_version does not match")
+    if contract["status"] != "confirmed":
+        errors.append("development contract status is not confirmed")
+    participant_values = [item["actor"] for item in contract["participants"]]
+    participants = set(participant_values)
+    if len(participant_values) != len(participants):
+        errors.append("collaboration contract participant actors must be unique")
+    consumers = set(declaration.get("consumers", []))
+    if participants != consumers:
+        errors.append("collaboration contract participants do not match declared consumers")
+    if set(declaration.get("confirmed_by", [])) != consumers:
+        errors.append("collaboration contract is not confirmed by every consumer")
+    actual_digest = hashlib.sha256(contract_path.read_bytes()).hexdigest()
+    if declaration.get("digest") != actual_digest:
+        errors.append("collaboration contract changed after confirmation")
+    ids = [
+        item["contract_id"]
+        for section in ("api", "data", "behavior", "acceptance")
+        for item in contract[section]
+    ]
+    if len(ids) != len(set(ids)):
+        errors.append("collaboration contract IDs must be unique")
+    for item in contract["api"]:
+        for section in ("request", "response"):
+            names = [field["name"] for field in item[section]]
+            if len(names) != len(set(names)):
+                errors.append(f"{item['contract_id']}: {section} field names must be unique")
+        codes = [error["code"] for error in item["errors"]]
+        if len(codes) != len(set(codes)):
+            errors.append(f"{item['contract_id']}: error codes must be unique")
+    for item in contract["data"]:
+        values = [str(value["value"]) for value in item["values"]]
+        if len(values) != len(set(values)):
+            errors.append(f"{item['contract_id']}: data values must be unique")
+    acceptance_ids = {item["acceptance_id"] for item in loop.get("acceptance_obligations", [])}
+    mapped_acceptance = {
+        acceptance_id
+        for item in contract["acceptance"]
+        for acceptance_id in item["acceptance_ids"]
+    }
+    unknown = mapped_acceptance - acceptance_ids
+    if unknown:
+        errors.append(f"collaboration contract has unknown acceptance IDs: {sorted(unknown)}")
+    return errors
+
+
 def classification_errors(loop: dict) -> list[str]:
     classification = loop.get("classification", {})
     if classification.get("control_version", 1) < 2:
@@ -490,6 +591,148 @@ def classification_errors(loop: dict) -> list[str]:
     missing = CLASSIFICATION_OBLIGATIONS[primary_type] - actual
     if missing:
         errors.append(f"classification obligations are missing: {sorted(missing)}")
+    return errors
+
+
+def reasoning_control_errors(loop: dict) -> list[str]:
+    if loop.get("state") in TERMINAL_STATES:
+        return []
+    missing = []
+    if "assumptions" not in loop:
+        missing.append("assumptions")
+    if "decision_records" not in loop:
+        missing.append("decision_records")
+    if "knowledge_state" not in loop:
+        missing.append("knowledge_state")
+    if "quality_metrics" not in loop:
+        missing.append("quality_metrics")
+    if "failure_memory" not in loop:
+        missing.append("failure_memory")
+    if "collaboration_contract" not in loop:
+        missing.append("collaboration_contract")
+    routing = loop.get("routing", {})
+    if "risk_driver" not in routing:
+        missing.append("routing.risk_driver")
+    elif isinstance(routing.get("risk_driver"), dict) and "secondary_risks" not in routing["risk_driver"]:
+        missing.append("routing.risk_driver.secondary_risks")
+    if missing:
+        return [
+            f"reasoning control fields require `agentloop migrate-v2`: {sorted(missing)}"
+        ]
+    return []
+
+
+def empty_knowledge_state() -> dict:
+    return {"known": [], "unknowns": [], "conflicts": []}
+
+
+def blocking_knowledge_ids(loop: dict, impacts: set[str] | None = None) -> list[str]:
+    knowledge = loop.get("knowledge_state", empty_knowledge_state())
+    blocked = []
+    for bucket in ("unknowns", "conflicts"):
+        for item in knowledge.get(bucket, []):
+            if item.get("status") != "open" or item.get("impact") == "non_blocking":
+                continue
+            if impacts is None or item.get("impact") in impacts:
+                blocked.append(item["knowledge_id"])
+    return blocked
+
+
+def knowledge_state_errors(loop: dict) -> list[str]:
+    knowledge = loop.get("knowledge_state")
+    if not isinstance(knowledge, dict):
+        return []
+    ids = [
+        item.get("knowledge_id")
+        for bucket in ("known", "unknowns", "conflicts")
+        for item in knowledge.get(bucket, [])
+    ]
+    return ["knowledge_id values must be unique across all knowledge kinds"] if len(ids) != len(set(ids)) else []
+
+
+def metric_status(operator: str, target: float, actual: float | None) -> str:
+    if actual is None:
+        return "pending"
+    comparisons = {
+        "gte": actual >= target,
+        "lte": actual <= target,
+        "eq": actual == target,
+    }
+    return "met" if comparisons[operator] else "missed"
+
+
+def learning_control_errors(root: Path, loop: dict, completion: bool = False) -> list[str]:
+    metrics = loop.get("quality_metrics")
+    failures = loop.get("failure_memory")
+    if not isinstance(metrics, list) or not isinstance(failures, list):
+        return []
+    errors = []
+    metric_ids = [item.get("metric_id") for item in metrics]
+    failure_ids = [item.get("failure_id") for item in failures]
+    if len(metric_ids) != len(set(metric_ids)):
+        errors.append("quality metric_id values must be unique")
+    if len(failure_ids) != len(set(failure_ids)):
+        errors.append("failure_id values must be unique")
+    metric_map = {item.get("metric_id"): item for item in metrics}
+    assumption_ids = {item.get("assumption_id") for item in loop.get("assumptions", [])}
+    decision_ids = {item.get("decision_id") for item in loop.get("decision_records", [])}
+    evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    runs = {item.get("evidence_id"): item for item in evidence.get("runs", [])}
+    for item in metrics:
+        target = item.get("target", {})
+        if (
+            target.get("operator") in {"gte", "lte", "eq"}
+            and isinstance(target.get("value"), (int, float))
+            and (item.get("actual") is None or isinstance(item.get("actual"), (int, float)))
+        ):
+            expected = metric_status(target["operator"], target["value"], item.get("actual"))
+            if item.get("status") != expected:
+                errors.append(f"{item.get('metric_id')}: metric status does not match actual value")
+    for item in failures:
+        failure_id = item.get("failure_id")
+        run = runs.get(item.get("evidence_id"))
+        if run is None or run.get("result") != "failed":
+            errors.append(f"{failure_id}: failure memory must reference failed evidence")
+        unknown_assumptions = set(item.get("assumption_ids", [])) - assumption_ids
+        unknown_decisions = set(item.get("decision_ids", [])) - decision_ids
+        unknown_metrics = set(item.get("metric_ids", [])) - set(metric_map)
+        if unknown_assumptions:
+            errors.append(f"{failure_id}: unknown assumptions: {sorted(unknown_assumptions)}")
+        if unknown_decisions:
+            errors.append(f"{failure_id}: unknown decisions: {sorted(unknown_decisions)}")
+        if unknown_metrics:
+            errors.append(f"{failure_id}: unknown quality metrics: {sorted(unknown_metrics)}")
+        for evidence_id in item.get("verification_evidence", []):
+            verification = runs.get(evidence_id)
+            if (
+                verification is None
+                or verification.get("result") != "passed"
+                or verification.get("validity") != "active"
+            ):
+                errors.append(f"{failure_id}: prevention evidence is not active and passed: {evidence_id}")
+    if completion:
+        recorded = {item.get("evidence_id") for item in failures}
+        missing = sorted(
+            evidence_id for evidence_id, run in runs.items()
+            if run.get("result") == "failed"
+            and run.get("requirement_version") == loop.get("requirement_version")
+            and evidence_id not in recorded
+        )
+        if missing:
+            errors.append(f"failed evidence has no failure memory: {missing}")
+        open_failures = sorted(
+            item.get("failure_id") for item in failures
+            if item.get("status") != "prevention_verified"
+        )
+        if open_failures:
+            errors.append(f"failure prevention is not verified: {open_failures}")
+        incomplete_metrics = sorted(
+            item.get("metric_id") for item in metrics
+            if item.get("required") and item.get("status") != "met"
+        )
+        if incomplete_metrics:
+            errors.append(f"required quality metrics are not met: {incomplete_metrics}")
     return errors
 
 
@@ -710,6 +953,57 @@ def integration_data_verification_errors(
             return errors
         candidate_errors.extend(run_errors)
     return errors + candidate_errors
+
+
+def collaboration_contract_verification_errors(root: Path, loop: dict) -> list[str]:
+    errors = collaboration_contract_errors(root, loop)
+    declaration = loop.get("collaboration_contract", {})
+    if errors or not declaration.get("required"):
+        return errors
+    contract_path = project_file(root, declaration["file"])
+    contract = load_yaml(contract_path)
+    expected = {
+        item["contract_id"]: section
+        for section in ("api", "data", "behavior", "acceptance")
+        for item in contract[section]
+    }
+    evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    current_commit = run_git(root, "rev-parse", "HEAD")
+    candidates = [
+        run for run in evidence.get("runs", [])
+        if run.get("requirement_version") == loop["requirement_version"]
+        and run.get("validity") == "active"
+        and run.get("result") == "passed"
+        and run.get("code_commit") == current_commit
+        and run.get("contract_consistency")
+    ]
+    if not candidates:
+        return ["no active passed collaboration contract evidence for the current commit"]
+    candidate_errors = []
+    for run in candidates:
+        report = run["contract_consistency"]
+        run_errors = []
+        if report.get("contract_digest") != declaration["digest"]:
+            run_errors.append("contract digest does not match the confirmed contract")
+        if set(report.get("participants", [])) != set(declaration["consumers"]):
+            run_errors.append("checked participants do not match contract consumers")
+        checks = {item.get("contract_id"): item for item in report.get("checks", [])}
+        if set(checks) != set(expected):
+            run_errors.append("contract consistency coverage is incomplete")
+        for contract_id, kind in expected.items():
+            check = checks.get(contract_id)
+            if not check or check.get("kind") != kind or check.get("result") != "passed":
+                run_errors.append(f"contract consistency check failed: {contract_id}")
+                continue
+            for relative in check.get("providers", []) + check.get("consumers", []):
+                path = project_file(root, relative)
+                if path is None or not path.is_file():
+                    run_errors.append(f"contract implementation path is missing: {relative}")
+        if not run_errors:
+            return []
+        candidate_errors.append(f"evidence {run.get('evidence_id')}: " + "; ".join(run_errors))
+    return candidate_errors
 
 
 def load_prototype_matrix(
@@ -1410,6 +1704,18 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             errors.append(
                 f"{loop.get('loop_id')}: classification control v1 must be upgraded with `agentloop migrate-v2`"
             )
+        errors.extend(
+            f"{loop.get('loop_id')}: {error}"
+            for error in reasoning_control_errors(loop)
+        )
+        errors.extend(
+            f"{loop.get('loop_id')}: {error}"
+            for error in knowledge_state_errors(loop)
+        )
+        errors.extend(
+            f"{loop.get('loop_id')}: {error}"
+            for error in learning_control_errors(root, loop)
+        )
         gate_ids = set()
         if loop.get("state") not in {"draft", "clarifying", "awaiting_requirement_confirmation"}:
             gate_ids.add("requirement_confirmation")
@@ -1589,6 +1895,11 @@ def base_loop(
             "obligations": [],
         },
         "acceptance_obligations": [],
+        "assumptions": [],
+        "decision_records": [],
+        "knowledge_state": empty_knowledge_state(),
+        "quality_metrics": [],
+        "failure_memory": [],
         "prototype": {
             "implementation_basis": False,
             "type": None,
@@ -1602,6 +1913,16 @@ def base_loop(
             "backend_endpoints": [],
             "database_objects": [],
             "verification_flow_id": None,
+        },
+        "collaboration_contract": {
+            "required": None,
+            "reason": "待需求确认前显式判断是否存在多 Agent 共享契约",
+            "file": None,
+            "status": "pending",
+            "digest": None,
+            "consumers": [],
+            "confirmed_by": [],
+            "updated_at": now(),
         },
         "scope": {
             "claim": "active",
@@ -1648,6 +1969,7 @@ def base_loop(
             "confidence": "medium",
             "decided_at": None,
             "decided_by": None,
+            "risk_driver": None,
             "development": {
                 "main_flow": main_flow,
                 "reason": "待需求确认后根据主要不确定性决定",
@@ -1976,9 +2298,22 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     path, loop = load_loop(root, args.loop_id)
     if loop["state"] in TERMINAL_STATES:
         raise ValueError("terminal Loop history does not require v2 migration")
+    routing = loop.setdefault("routing", {})
+    risk_driver = routing.get("risk_driver")
+    reasoning_complete = (
+        "assumptions" in loop
+        and "decision_records" in loop
+        and "knowledge_state" in loop
+        and "quality_metrics" in loop
+        and "failure_memory" in loop
+        and "collaboration_contract" in loop
+        and "risk_driver" in routing
+        and (risk_driver is None or "secondary_risks" in risk_driver)
+    )
     if (
         loop.get("classification", {}).get("control_version") == 2
         and "acceptance_obligations" in loop
+        and reasoning_complete
     ):
         raise ValueError("Loop already uses control v2")
     previous = loop["state"]
@@ -1987,6 +2322,21 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     classification.setdefault("basis", "待迁移后重新确认")
     classification.setdefault("obligations", [])
     loop["acceptance_obligations"] = []
+    loop.setdefault("assumptions", [])
+    loop.setdefault("decision_records", [])
+    loop.setdefault("knowledge_state", empty_knowledge_state())
+    loop.setdefault("quality_metrics", [])
+    loop.setdefault("failure_memory", [])
+    loop.setdefault("collaboration_contract", {
+        "required": None,
+        "reason": "迁移后必须重新判断是否存在多 Agent 共享契约",
+        "file": None,
+        "status": "pending",
+        "digest": None,
+        "consumers": [],
+        "confirmed_by": [],
+        "updated_at": now(),
+    })
     profile = loop["execution_profile"]
     profile["status"] = "provisional"
     profile["qualifications"] = {
@@ -1998,7 +2348,10 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     }
     loop["state"] = "clarifying"
     loop["blocked"] = None
-    loop["routing"]["status"] = "pending"
+    routing["status"] = "pending"
+    routing["decided_at"] = None
+    routing["decided_by"] = None
+    routing["risk_driver"] = None
     for gate_id in ("requirement_confirmation", "routing_confirmation", "completion"):
         gate_value = loop["gates"][gate_id]
         gate_value["status"] = "pending" if gate_id != "routing_confirmation" else "not_required"
@@ -2148,6 +2501,39 @@ def context_projection(root: Path, path: Path, loop: dict, subflow_id: str | Non
     if subflow is not None:
         result["focus"] = {"kind": "subflow", **subflow_context(subflow)}
 
+    phase_impacts = {
+        "requirements": {"non_blocking", "routing", "acceptance", "implementation", "verification"},
+        "development": {"routing", "acceptance", "implementation"},
+        "verification": {"acceptance", "implementation", "verification"},
+        "integration": {"implementation", "verification"},
+        "completion": {"acceptance", "verification"},
+        "recovery": {"non_blocking", "routing", "acceptance", "implementation", "verification"},
+    }[phase]
+    knowledge = loop.get("knowledge_state", empty_knowledge_state())
+    projected_knowledge = {
+        bucket: [
+            item for item in knowledge.get(bucket, [])
+            if item.get("impact") in phase_impacts
+        ]
+        for bucket in ("known", "unknowns", "conflicts")
+    }
+    result["reasoning_control"] = {
+        "assumptions": loop.get("assumptions", []),
+        "decision_records": loop.get("decision_records", []),
+        "knowledge_state": projected_knowledge,
+    }
+    if phase in {"requirements", "verification", "completion", "recovery"}:
+        result["learning_control"] = {
+            "quality_metrics": loop.get("quality_metrics", []),
+            "failure_memory": loop.get("failure_memory", []),
+        }
+    result["collaboration_contract"] = loop.get("collaboration_contract")
+    declaration = loop.get("collaboration_contract", {})
+    if phase in {"development", "verification", "integration", "completion", "recovery"} and declaration.get("required"):
+        contract_path = project_file(root, declaration.get("file"))
+        if contract_path is not None and contract_path.is_file():
+            result["development_contract"] = load_yaml(contract_path)
+
     acceptance = acceptance_context(loop, subflow_id)
     if phase == "requirements":
         result.update({
@@ -2286,8 +2672,75 @@ def cmd_prototype_scan(args: argparse.Namespace) -> None:
 def cmd_route(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
     if loop["state"] not in {"ready_for_development", "development_preparing"}:
         raise ValueError("routing is only allowed in ready_for_development or development_preparing")
+    blocking = [
+        item["assumption_id"] for item in loop.get("assumptions", [])
+        if item["status"] == "unverified" and item["impact"] != "non_blocking"
+    ]
+    if blocking:
+        raise ValueError(f"routing has unresolved blocking assumptions: {blocking}")
+    knowledge_blocking = blocking_knowledge_ids(loop, {"routing"})
+    if knowledge_blocking:
+        raise ValueError(f"routing has unresolved knowledge: {knowledge_blocking}")
+    expected_flow = RISK_FLOW_MAP[args.risk_category]
+    if args.main_flow != expected_flow:
+        raise ValueError(
+            f"risk category {args.risk_category} requires main flow {expected_flow}; "
+            f"got {args.main_flow}"
+        )
+    secondary_risks = []
+    seen_categories = {args.risk_category}
+    supporting_flows = list(dict.fromkeys(args.supporting_flow or []))
+    for raw in args.secondary_risk or []:
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"invalid --secondary-risk JSON: {error.msg}") from error
+        if not isinstance(value, dict):
+            raise ValueError("--secondary-risk must be a JSON object")
+        required = {"category", "statement", "evidence", "severity", "handling"}
+        missing = required - set(value)
+        if missing:
+            raise ValueError(f"secondary risk is missing fields: {sorted(missing)}")
+        category = value["category"]
+        if category not in RISK_FLOW_MAP:
+            raise ValueError(f"unknown secondary risk category: {category}")
+        if category in seen_categories:
+            raise ValueError(f"risk category is duplicated: {category}")
+        seen_categories.add(category)
+        if value["severity"] not in {"low", "medium", "high"}:
+            raise ValueError("secondary risk severity must be low, medium, or high")
+        if not str(value["statement"]).strip() or not str(value["evidence"]).strip():
+            raise ValueError("secondary risk statement and evidence must be non-empty")
+        handling = value["handling"]
+        if handling == "supporting_flow":
+            flow_id = RISK_FLOW_MAP[category]
+            if flow_id not in supporting_flows:
+                supporting_flows.append(flow_id)
+            mapped = {"kind": "supporting_flow", "flow_id": flow_id}
+        elif handling == "verification_obligation":
+            obligation = str(value.get("verification_obligation", "")).strip()
+            if not obligation:
+                raise ValueError(
+                    "secondary risk with verification_obligation handling requires "
+                    "verification_obligation"
+                )
+            mapped = {"kind": "verification_obligation", "obligation": obligation}
+        else:
+            raise ValueError(
+                "secondary risk handling must be supporting_flow or verification_obligation"
+            )
+        secondary_risks.append({
+            "category": category,
+            "statement": value["statement"],
+            "evidence": value["evidence"],
+            "severity": value["severity"],
+            "mapping": mapped,
+        })
     with loop_lock(root, args.loop_id, args.actor):
         loop["routing"].update(
             {
@@ -2295,13 +2748,20 @@ def cmd_route(args: argparse.Namespace) -> None:
                 "confidence": args.confidence,
                 "decided_at": now(),
                 "decided_by": args.actor,
+                "risk_driver": {
+                    "category": args.risk_category,
+                    "statement": args.risk_statement,
+                    "evidence": args.risk_evidence,
+                    "severity": args.risk_severity,
+                    "secondary_risks": secondary_risks,
+                },
             }
         )
         loop["routing"]["development"].update(
             {
                 "main_flow": args.main_flow,
                 "reason": args.reason,
-                "supporting_flows": args.supporting_flow or [],
+                "supporting_flows": supporting_flows,
                 "required_outputs": args.required_output or [],
             }
         )
@@ -2360,6 +2820,347 @@ def cmd_route(args: argparse.Namespace) -> None:
         errors = list(schema_validator("loop.schema.json").iter_errors(loop))
         if errors:
             raise ValueError(f"routing invalid at {errors[0].json_path}: {errors[0].message}")
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_assumption(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    items = loop.setdefault("assumptions", [])
+    item = next((value for value in items if value["assumption_id"] == args.assumption_id), None)
+    if item is None:
+        if not args.statement or not args.impact:
+            raise ValueError("new assumption requires --statement and --impact")
+        item = {
+            "assumption_id": args.assumption_id,
+            "statement": args.statement,
+            "impact": args.impact,
+            "status": args.status,
+            "owner": args.actor,
+            "evidence": args.evidence,
+            "updated_at": now(),
+        }
+        items.append(item)
+    else:
+        if args.statement:
+            item["statement"] = args.statement
+        if args.impact:
+            item["impact"] = args.impact
+        item.update(status=args.status, owner=args.actor, evidence=args.evidence, updated_at=now())
+    if args.status != "unverified" and not args.evidence:
+        raise ValueError("confirmed or rejected assumption requires --evidence")
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"assumption invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_decision(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    options = list(dict.fromkeys(args.option))
+    if args.selected not in options:
+        raise ValueError("--selected must be one of --option")
+    records = loop.setdefault("decision_records", [])
+    if any(item["decision_id"] == args.decision_id for item in records):
+        raise ValueError(f"decision already exists: {args.decision_id}")
+    records.append({
+        "decision_id": args.decision_id,
+        "question": args.question,
+        "options": options,
+        "selected": args.selected,
+        "evidence": args.evidence,
+        "rationale": args.rationale,
+        "actor": args.actor,
+        "decided_at": now(),
+    })
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"decision invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_knowledge(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    knowledge = loop.setdefault("knowledge_state", empty_knowledge_state())
+    bucket = {"known": "known", "unknown": "unknowns", "conflict": "conflicts"}[args.kind]
+    item = next(
+        (value for value in knowledge[bucket] if value["knowledge_id"] == args.knowledge_id),
+        None,
+    )
+    if any(
+        value["knowledge_id"] == args.knowledge_id
+        for other_bucket in ("known", "unknowns", "conflicts")
+        if other_bucket != bucket
+        for value in knowledge[other_bucket]
+    ):
+        raise ValueError("knowledge_id already exists with a different kind")
+    if item is None and (not args.statement or not args.impact):
+        raise ValueError("new knowledge requires --statement and --impact")
+
+    if args.kind == "known":
+        sources = args.source if args.source is not None else (item or {}).get("sources", [])
+        if not sources:
+            raise ValueError("known knowledge requires at least one --source")
+        value = {
+            "knowledge_id": args.knowledge_id,
+            "statement": args.statement or item["statement"],
+            "impact": args.impact or item["impact"],
+            "sources": list(dict.fromkeys(sources)),
+            "owner": args.actor,
+            "updated_at": now(),
+        }
+    else:
+        status = args.status or (item or {}).get("status", "open")
+        resolution = args.resolution if args.resolution is not None else (item or {}).get("resolution")
+        evidence = args.evidence if args.evidence is not None else (item or {}).get("evidence", [])
+        if status == "resolved" and (not resolution or not evidence):
+            raise ValueError("resolved knowledge requires --resolution and --evidence")
+        if status == "open":
+            resolution = None
+            evidence = []
+        value = {
+            "knowledge_id": args.knowledge_id,
+            "impact": args.impact or item["impact"],
+            "status": status,
+            "resolution": resolution,
+            "evidence": evidence,
+            "owner": args.actor,
+            "updated_at": now(),
+        }
+        if args.kind == "unknown":
+            value["question"] = args.statement or item["question"]
+        else:
+            claims = []
+            for raw in args.source_claim or []:
+                try:
+                    claim = json.loads(raw)
+                except json.JSONDecodeError as error:
+                    raise ValueError(f"invalid --source-claim JSON: {error.msg}") from error
+                if not isinstance(claim, dict) or set(claim) != {"source", "claim"}:
+                    raise ValueError("--source-claim requires source and claim")
+                claims.append(claim)
+            claims = claims or (item or {}).get("claims", [])
+            if len(claims) < 2:
+                raise ValueError("conflicting knowledge requires at least two --source-claim values")
+            value["statement"] = args.statement or item["statement"]
+            value["claims"] = claims
+    if item is None:
+        knowledge[bucket].append(value)
+    else:
+        item.clear()
+        item.update(value)
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"knowledge invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_quality_metric(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    metrics = loop.setdefault("quality_metrics", [])
+    item = next((value for value in metrics if value["metric_id"] == args.metric_id), None)
+    if item is None and (
+        not args.name or not args.unit or args.operator is None or args.target is None
+    ):
+        raise ValueError("new quality metric requires --name, --unit, --operator, and --target")
+    target = {
+        "operator": args.operator or item["target"]["operator"],
+        "value": args.target if args.target is not None else item["target"]["value"],
+    }
+    actual = args.actual if args.actual is not None else (item or {}).get("actual")
+    evidence = args.evidence if args.evidence is not None else (item or {}).get("evidence", [])
+    status = metric_status(target["operator"], target["value"], actual)
+    if status != "pending" and not evidence:
+        raise ValueError("measured quality metric requires at least one --evidence")
+    value = {
+        "metric_id": args.metric_id,
+        "name": args.name or item["name"],
+        "unit": args.unit or item["unit"],
+        "baseline": args.baseline if args.baseline is not None else (item or {}).get("baseline"),
+        "target": target,
+        "actual": actual,
+        "required": args.required if args.required is not None else (item or {}).get("required", True),
+        "status": status,
+        "evidence": list(dict.fromkeys(evidence)),
+        "owner": args.actor,
+        "updated_at": now(),
+    }
+    if item is None:
+        metrics.append(value)
+    else:
+        item.clear()
+        item.update(value)
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"quality metric invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_failure_memory(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    records = loop.setdefault("failure_memory", [])
+    item = next((value for value in records if value["failure_id"] == args.failure_id), None)
+    if item is None and (
+        not args.evidence_id or not args.mistake or not args.actual_reason or not args.prevention
+    ):
+        raise ValueError(
+            "new failure memory requires --evidence-id, --mistake, --actual-reason, and --prevention"
+        )
+    evidence_path = loop_dir(root, args.loop_id) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    runs = {run.get("evidence_id"): run for run in evidence.get("runs", [])}
+    evidence_id = args.evidence_id or item["evidence_id"]
+    if evidence_id not in runs or runs[evidence_id].get("result") != "failed":
+        raise ValueError("failure memory requires an existing failed --evidence-id")
+    assumption_ids = args.assumption_id if args.assumption_id is not None else (item or {}).get("assumption_ids", [])
+    decision_ids = args.decision_id if args.decision_id is not None else (item or {}).get("decision_ids", [])
+    metric_ids = args.metric_id if args.metric_id is not None else (item or {}).get("metric_ids", [])
+    unlinked_reason = (
+        args.unlinked_reason if args.unlinked_reason is not None
+        else (item or {}).get("unlinked_reason")
+    )
+    if not assumption_ids and not decision_ids and not unlinked_reason:
+        raise ValueError("failure memory requires an assumption/decision link or --unlinked-reason")
+    status = args.status or (item or {}).get("status", "open")
+    verification_evidence = (
+        args.verification_evidence
+        if args.verification_evidence is not None
+        else (item or {}).get("verification_evidence", [])
+    )
+    if status == "open":
+        verification_evidence = []
+    elif not verification_evidence:
+        raise ValueError("verified prevention requires --verification-evidence")
+    value = {
+        "failure_id": args.failure_id,
+        "evidence_id": evidence_id,
+        "mistake": args.mistake or item["mistake"],
+        "actual_reason": args.actual_reason or item["actual_reason"],
+        "prevention": args.prevention or item["prevention"],
+        "assumption_ids": list(dict.fromkeys(assumption_ids)),
+        "decision_ids": list(dict.fromkeys(decision_ids)),
+        "metric_ids": list(dict.fromkeys(metric_ids)),
+        "unlinked_reason": unlinked_reason,
+        "status": status,
+        "verification_evidence": list(dict.fromkeys(verification_evidence)),
+        "actor": args.actor,
+        "recorded_at": (item or {}).get("recorded_at", now()),
+        "updated_at": now(),
+    }
+    if item is None:
+        records.append(value)
+    else:
+        item.clear()
+        item.update(value)
+    loop["updated_at"] = now()
+    semantic_errors = learning_control_errors(root, loop)
+    if semantic_errors:
+        raise ValueError("; ".join(semantic_errors))
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"failure memory invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_contract_declare(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    if loop["state"] not in {"draft", "clarifying", "ready_for_development", "development_preparing"}:
+        raise ValueError("collaboration contract can only be declared before development")
+    consumers = list(dict.fromkeys(args.consumer or []))
+    if args.required and len(consumers) < 2:
+        raise ValueError("required collaboration contract needs at least two --consumer values")
+    relative = (
+        args.file or f".agentloop/loops/{args.loop_id}/development-contract.yaml"
+        if args.required else None
+    )
+    loop["collaboration_contract"] = {
+        "required": args.required,
+        "reason": args.reason,
+        "file": relative,
+        "status": "draft" if args.required else "not_required",
+        "digest": None,
+        "consumers": consumers if args.required else [],
+        "confirmed_by": [],
+        "updated_at": now(),
+    }
+    if args.required:
+        loop.setdefault("files", {})["development_contract"] = relative
+    else:
+        loop.setdefault("files", {}).pop("development_contract", None)
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"collaboration declaration invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_contract_confirm(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    declaration = loop.get("collaboration_contract", {})
+    if not declaration.get("required"):
+        raise ValueError("collaboration contract is not required")
+    if loop["state"] not in {"clarifying", "ready_for_development", "development_preparing"}:
+        raise ValueError("collaboration contract must be confirmed before development")
+    contract_path = project_file(root, declaration.get("file"))
+    if contract_path is None or not contract_path.is_file():
+        raise ValueError("collaboration contract file does not exist")
+    contract = load_yaml(contract_path)
+    errors = list(schema_validator("development-contract.schema.json").iter_errors(contract))
+    if errors:
+        raise ValueError(f"collaboration contract invalid at {errors[0].json_path}: {errors[0].message}")
+    confirmed_by = set(args.confirmed_by or [])
+    consumers = set(declaration["consumers"])
+    if confirmed_by != consumers:
+        raise ValueError("--confirmed-by must exactly cover every contract consumer")
+    contract["status"] = "confirmed"
+    atomic_yaml(contract_path, contract)
+    declaration["status"] = "confirmed"
+    declaration["digest"] = hashlib.sha256(contract_path.read_bytes()).hexdigest()
+    declaration["confirmed_by"] = sorted(confirmed_by)
+    declaration["updated_at"] = now()
+    loop["updated_at"] = now()
+    semantic_errors = collaboration_contract_errors(root, loop)
+    if semantic_errors:
+        raise ValueError("; ".join(semantic_errors))
+    with loop_lock(root, args.loop_id, args.actor):
         atomic_yaml(path, loop)
         write_control_snapshot(root, loop)
 
@@ -2681,6 +3482,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
                 errors.extend(integration_data_verification_errors(
                     child_root, child_loop, runtime_flows(child_root)
                 ))
+                errors.extend(collaboration_contract_verification_errors(child_root, child_loop))
     else:
         for subflow in loop["subflows"]:
             if subflow["state"] == "skipped" and subflow.get("skip_reason"):
@@ -2698,6 +3500,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
         errors.append("integration_verification is not complete")
     errors.extend(acceptance_verification_errors(root, loop))
     errors.extend(integration_data_verification_errors(root, loop, flows))
+    errors.extend(collaboration_contract_verification_errors(root, loop))
     return errors
 
 
@@ -2707,9 +3510,29 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     if current == "blocked" and loop.get("blocked", {}).get("resume_state"):
         allowed.add(loop["blocked"]["resume_state"])
     errors = [] if target in allowed else [f"illegal transition: {current} -> {target}"]
+    if target != "cancelled":
+        errors.extend(reasoning_control_errors(loop))
+    knowledge_impacts = {
+        "awaiting_requirement_confirmation": {"routing", "acceptance"},
+        "development_preparing": {"routing", "acceptance", "implementation"},
+        "orchestrating": {"routing", "acceptance", "implementation", "verification"},
+        "developing": {"implementation"},
+        "ready_for_verification": {"acceptance", "implementation", "verification"},
+        "verifying": {"acceptance", "verification"},
+        "verified": {"acceptance", "verification"},
+        "done": {"acceptance", "verification"},
+    }.get(target)
+    if knowledge_impacts:
+        blocked_knowledge = blocking_knowledge_ids(loop, knowledge_impacts)
+        if blocked_knowledge:
+            errors.append(f"transition has unresolved knowledge: {blocked_knowledge}")
+    if target in {"verified", "done"}:
+        errors.extend(learning_control_errors(root, loop, completion=True))
+        errors.extend(collaboration_contract_verification_errors(root, loop))
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
+        errors.extend(collaboration_contract_declaration_errors(loop))
         errors.extend(classification_errors(loop))
         errors.extend(execution_profile_errors(root, loop))
         errors.extend(acceptance_requirement_errors(loop))
@@ -2720,6 +3543,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("execution_profile is not confirmed")
         errors.extend(gate_subject_errors(root, loop, {"requirement_confirmation"}))
     if target in {"development_preparing", "orchestrating"}:
+        errors.extend(collaboration_contract_errors(root, loop))
         if loop["routing"]["status"] != "decided":
             errors.append("routing is not decided")
         if not loop["git"]["baseline_commit"]:
@@ -2732,6 +3556,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
         if target == "orchestrating":
             errors.extend(development_assurance_errors(root, loop))
     if target == "developing":
+        errors.extend(collaboration_contract_errors(root, loop))
         errors.extend(prototype_preparation_errors(root, loop))
         errors.extend(prototype_business_preparation_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
@@ -2793,6 +3618,7 @@ def subflow_transition_errors(root: Path, loop: dict, subflow: dict, target: str
     if loop["state"] != "orchestrating":
         errors.append("subflow transitions require parent state orchestrating")
     if target == "developing":
+        errors.extend(collaboration_contract_errors(root, loop))
         errors.extend(prototype_preparation_errors(root, loop, subflow))
         errors.extend(prototype_business_preparation_errors(root, loop, subflow))
         errors.extend(development_assurance_errors(root, loop, subflow))
@@ -3178,7 +4004,10 @@ def cmd_evidence(args: argparse.Namespace) -> None:
             "executed_steps": report["executed_steps"],
             "skipped_required": report["skipped_required"],
         }
-        for key in ("visual", "data_lineage", "business_function", "navigation"):
+        for key in (
+            "visual", "data_lineage", "contract_consistency",
+            "business_function", "navigation",
+        ):
             if report.get(key) is not None:
                 run[key] = report[key]
     for previous in evidence["runs"]:
@@ -3389,7 +4218,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         raise ValueError("missing plugin assets: " + ", ".join(missing))
     for name in (
         "project", "loop", "flow", "evidence", "prototype-matrix",
-        "prototype-behavior-inventory", "development-assurance",
+        "prototype-behavior-inventory", "development-assurance", "development-contract",
     ):
         schema_validator(f"{name}.schema.json")
     project_path = Path(args.root).resolve() / ".agentloop" / "project.yaml"
@@ -3454,11 +4283,107 @@ def parser() -> argparse.ArgumentParser:
         "technical-validation",
     ], required=True)
     route.add_argument("--reason", required=True)
+    route.add_argument("--risk-category", choices=sorted(RISK_FLOW_MAP), required=True)
+    route.add_argument("--risk-statement", required=True)
+    route.add_argument("--risk-evidence", required=True)
+    route.add_argument("--risk-severity", choices=["low", "medium", "high"], required=True)
+    route.add_argument(
+        "--secondary-risk",
+        action="append",
+        help=(
+            "JSON object with category, statement, evidence, severity, handling, and "
+            "verification_obligation when handling is verification_obligation"
+        ),
+    )
     route.add_argument("--supporting-flow", action="append")
     route.add_argument("--required-output", action="append")
     route.add_argument("--verification", choices=["self_check", "targeted", "flow"], required=True)
     route.add_argument("--verification-reason", required=True)
     route.set_defaults(func=cmd_route)
+
+    assumption = commands.add_parser("assumption")
+    assumption.add_argument("loop_id")
+    assumption.add_argument("--assumption-id", required=True)
+    assumption.add_argument("--actor", required=True)
+    assumption.add_argument("--statement")
+    assumption.add_argument("--impact", choices=["non_blocking", "routing", "acceptance", "implementation", "verification"])
+    assumption.add_argument("--status", choices=["unverified", "confirmed", "rejected"], required=True)
+    assumption.add_argument("--evidence")
+    assumption.set_defaults(func=cmd_assumption)
+
+    decision = commands.add_parser("decision")
+    decision.add_argument("loop_id")
+    decision.add_argument("--decision-id", required=True)
+    decision.add_argument("--actor", required=True)
+    decision.add_argument("--question", required=True)
+    decision.add_argument("--option", action="append", required=True)
+    decision.add_argument("--selected", required=True)
+    decision.add_argument("--evidence", action="append", required=True)
+    decision.add_argument("--rationale", required=True)
+    decision.set_defaults(func=cmd_decision)
+
+    knowledge = commands.add_parser("knowledge")
+    knowledge.add_argument("loop_id")
+    knowledge.add_argument("--knowledge-id", required=True)
+    knowledge.add_argument("--kind", choices=["known", "unknown", "conflict"], required=True)
+    knowledge.add_argument("--actor", required=True)
+    knowledge.add_argument("--statement")
+    knowledge.add_argument("--impact", choices=["non_blocking", "routing", "acceptance", "implementation", "verification"])
+    knowledge.add_argument("--source", action="append")
+    knowledge.add_argument("--source-claim", action="append")
+    knowledge.add_argument("--status", choices=["open", "resolved"])
+    knowledge.add_argument("--resolution")
+    knowledge.add_argument("--evidence", action="append")
+    knowledge.set_defaults(func=cmd_knowledge)
+
+    quality_metric = commands.add_parser("quality-metric")
+    quality_metric.add_argument("loop_id")
+    quality_metric.add_argument("--metric-id", required=True)
+    quality_metric.add_argument("--actor", required=True)
+    quality_metric.add_argument("--name")
+    quality_metric.add_argument("--unit")
+    quality_metric.add_argument("--baseline", type=float)
+    quality_metric.add_argument("--operator", choices=["gte", "lte", "eq"])
+    quality_metric.add_argument("--target", type=float)
+    quality_metric.add_argument("--actual", type=float)
+    metric_requirement = quality_metric.add_mutually_exclusive_group()
+    metric_requirement.add_argument("--required", dest="required", action="store_true", default=None)
+    metric_requirement.add_argument("--optional", dest="required", action="store_false")
+    quality_metric.add_argument("--evidence", action="append")
+    quality_metric.set_defaults(func=cmd_quality_metric)
+
+    failure_memory = commands.add_parser("failure-memory")
+    failure_memory.add_argument("loop_id")
+    failure_memory.add_argument("--failure-id", required=True)
+    failure_memory.add_argument("--actor", required=True)
+    failure_memory.add_argument("--evidence-id")
+    failure_memory.add_argument("--mistake")
+    failure_memory.add_argument("--actual-reason")
+    failure_memory.add_argument("--prevention")
+    failure_memory.add_argument("--assumption-id", action="append")
+    failure_memory.add_argument("--decision-id", action="append")
+    failure_memory.add_argument("--metric-id", action="append")
+    failure_memory.add_argument("--unlinked-reason")
+    failure_memory.add_argument("--status", choices=["open", "prevention_verified"])
+    failure_memory.add_argument("--verification-evidence", action="append")
+    failure_memory.set_defaults(func=cmd_failure_memory)
+
+    contract_declare = commands.add_parser("contract-declare")
+    contract_declare.add_argument("loop_id")
+    contract_declare.add_argument("--actor", required=True)
+    contract_requirement = contract_declare.add_mutually_exclusive_group(required=True)
+    contract_requirement.add_argument("--required", dest="required", action="store_true")
+    contract_requirement.add_argument("--not-required", dest="required", action="store_false")
+    contract_declare.add_argument("--reason", required=True)
+    contract_declare.add_argument("--file")
+    contract_declare.add_argument("--consumer", action="append")
+    contract_declare.set_defaults(func=cmd_contract_declare)
+
+    contract_confirm = commands.add_parser("contract-confirm")
+    contract_confirm.add_argument("loop_id")
+    contract_confirm.add_argument("--actor", required=True)
+    contract_confirm.add_argument("--confirmed-by", action="append", required=True)
+    contract_confirm.set_defaults(func=cmd_contract_confirm)
 
     acceptance_plan = commands.add_parser("acceptance-plan")
     acceptance_plan.add_argument("loop_id")

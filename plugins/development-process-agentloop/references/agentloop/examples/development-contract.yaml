@@ -1,0 +1,40 @@
+schema_version: 1
+loop_id: al-20260730-002
+requirement_version: 1
+status: confirmed
+participants:
+  - actor: backend-agent
+    responsibilities: [实现用户接口和业务规则]
+  - actor: frontend-agent
+    responsibilities: [按接口和字段语义实现用户页面]
+api:
+  - contract_id: API-01
+    method: POST
+    path: /users
+    request:
+      - {name: username, type: string, required: true, meaning: 登录账号}
+    response:
+      - {name: userId, type: long, required: true, meaning: 用户唯一标识}
+      - {name: status, type: string, required: true, meaning: 用户当前可用状态}
+    errors:
+      - {code: USER_EXISTS, meaning: 登录账号已经存在}
+data:
+  - contract_id: DATA-01
+    name: user_status
+    meaning: 用户是否允许正常使用系统
+    values:
+      - {value: ACTIVE, meaning: 用户可以正常使用}
+      - {value: DISABLED, meaning: 用户被禁止使用}
+behavior:
+  - contract_id: BEH-01
+    name: duplicate_username
+    trigger: 创建用户
+    condition: 登录账号已经存在
+    outcome: 拒绝创建并返回 USER_EXISTS
+acceptance:
+  - contract_id: ACC-01
+    acceptance_ids: [AC-01]
+    scenario: 用户创建成功
+    given: [登录账号不存在]
+    when: 调用 POST /users
+    then: [返回用户唯一标识, 状态为 ACTIVE]
