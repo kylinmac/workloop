@@ -584,6 +584,8 @@ def main() -> None:
         legacy_loop.pop("assumptions")
         legacy_loop.pop("decision_records")
         legacy_loop.pop("knowledge_state")
+        legacy_loop.pop("quality_metrics")
+        legacy_loop.pop("failure_memory")
         legacy_loop["routing"].pop("risk_driver")
         legacy_path.write_text(yaml.safe_dump(legacy_loop, allow_unicode=True, sort_keys=False))
         legacy_validation = subprocess.run(
@@ -600,6 +602,8 @@ def main() -> None:
         assert migrated["assumptions"] == []
         assert migrated["decision_records"] == []
         assert migrated["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
+        assert migrated["quality_metrics"] == []
+        assert migrated["failure_memory"] == []
         assert migrated["routing"]["risk_driver"] is None
         assert migrated["routing"]["status"] == "pending"
         run(
@@ -621,6 +625,8 @@ def main() -> None:
         reasoning_loop.pop("assumptions")
         reasoning_loop.pop("decision_records")
         reasoning_loop.pop("knowledge_state")
+        reasoning_loop.pop("quality_metrics")
+        reasoning_loop.pop("failure_memory")
         reasoning_loop["routing"].pop("risk_driver")
         reasoning_path.write_text(
             yaml.safe_dump(reasoning_loop, allow_unicode=True, sort_keys=False)
@@ -640,6 +646,8 @@ def main() -> None:
         assert migrated_reasoning["assumptions"] == []
         assert migrated_reasoning["decision_records"] == []
         assert migrated_reasoning["knowledge_state"] == {"known": [], "unknowns": [], "conflicts": []}
+        assert migrated_reasoning["quality_metrics"] == []
+        assert migrated_reasoning["failure_memory"] == []
         assert migrated_reasoning["routing"]["risk_driver"] is None
         run(
             root, "transition", reasoning_legacy, "cancelled",
