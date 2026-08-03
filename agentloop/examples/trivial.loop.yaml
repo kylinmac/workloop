@@ -40,6 +40,9 @@ acceptance_obligations:
     required: true
     implementation_paths: [src/copy.ts]
     verification: {flow_id: null, check_id: copy-self-check, executor: command, subflow_id: null}
+assumptions: []
+decision_records: []
+knowledge_state: {known: [], unknowns: [], conflicts: []}
 scope:
   claim: released
   claimed_at: "2026-07-30T10:00:00+08:00"

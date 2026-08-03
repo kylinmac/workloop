@@ -45,6 +45,9 @@ acceptance_obligations:
     required: true
     implementation_paths: [src/payment/**]
     verification: {flow_id: null, check_id: payment-reversal, executor: code, subflow_id: sf-02-payment}
+assumptions: []
+decision_records: []
+knowledge_state: {known: [], unknowns: [], conflicts: []}
 scope:
   claim: active
   claimed_at: "2026-07-30T12:00:00+08:00"

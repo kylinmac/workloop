@@ -39,6 +39,9 @@ acceptance_obligations:
     required: true
     implementation_paths: [src/refund/**]
     verification: {flow_id: null, check_id: refund-targeted, executor: code, subflow_id: null}
+assumptions: []
+decision_records: []
+knowledge_state: {known: [], unknowns: [], conflicts: []}
 scope:
   claim: active
   claimed_at: "2026-07-30T11:00:00+08:00"

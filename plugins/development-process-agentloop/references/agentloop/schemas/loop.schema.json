@@ -135,6 +135,7 @@
     },
     "assumptions": {"type": "array", "items": {"$ref": "#/$defs/assumption"}},
     "decision_records": {"type": "array", "items": {"$ref": "#/$defs/decision_record"}},
+    "knowledge_state": {"$ref": "#/$defs/knowledge_state"},
     "prototype": {"$ref": "#/$defs/prototype"},
     "integration_data": {"$ref": "#/$defs/integration_data"},
     "scope": {"$ref": "#/$defs/scope"},
@@ -326,6 +327,80 @@
         "actor": {"type": "string", "minLength": 1},
         "decided_at": {"type": "string", "format": "date-time"}
       }
+    },
+    "knowledge_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["known", "unknowns", "conflicts"],
+      "properties": {
+        "known": {"type": "array", "items": {"$ref": "#/$defs/known_knowledge"}},
+        "unknowns": {"type": "array", "items": {"$ref": "#/$defs/unknown_knowledge"}},
+        "conflicts": {"type": "array", "items": {"$ref": "#/$defs/conflicting_knowledge"}}
+      }
+    },
+    "known_knowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knowledge_id", "statement", "impact", "sources", "owner", "updated_at"],
+      "properties": {
+        "knowledge_id": {"type": "string", "pattern": "^KNO-[0-9]{2,}$"},
+        "statement": {"type": "string", "minLength": 1},
+        "impact": {"enum": ["non_blocking", "routing", "acceptance", "implementation", "verification"]},
+        "sources": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "owner": {"type": "string", "minLength": 1},
+        "updated_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "unknown_knowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knowledge_id", "question", "impact", "status", "resolution", "evidence", "owner", "updated_at"],
+      "properties": {
+        "knowledge_id": {"type": "string", "pattern": "^KNO-[0-9]{2,}$"},
+        "question": {"type": "string", "minLength": 1},
+        "impact": {"enum": ["non_blocking", "routing", "acceptance", "implementation", "verification"]},
+        "status": {"enum": ["open", "resolved"]},
+        "resolution": {"type": ["string", "null"]},
+        "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "owner": {"type": "string", "minLength": 1},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "resolved"}}},
+        "then": {"properties": {"resolution": {"type": "string", "minLength": 1}, "evidence": {"minItems": 1}}},
+        "else": {"properties": {"resolution": {"type": "null"}, "evidence": {"maxItems": 0}}}
+      }]
+    },
+    "conflicting_knowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knowledge_id", "statement", "impact", "claims", "status", "resolution", "evidence", "owner", "updated_at"],
+      "properties": {
+        "knowledge_id": {"type": "string", "pattern": "^KNO-[0-9]{2,}$"},
+        "statement": {"type": "string", "minLength": 1},
+        "impact": {"enum": ["non_blocking", "routing", "acceptance", "implementation", "verification"]},
+        "claims": {
+          "type": "array", "minItems": 2, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["source", "claim"],
+            "properties": {
+              "source": {"type": "string", "minLength": 1},
+              "claim": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "status": {"enum": ["open", "resolved"]},
+        "resolution": {"type": ["string", "null"]},
+        "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "owner": {"type": "string", "minLength": 1},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "resolved"}}},
+        "then": {"properties": {"resolution": {"type": "string", "minLength": 1}, "evidence": {"minItems": 1}}},
+        "else": {"properties": {"resolution": {"type": "null"}, "evidence": {"maxItems": 0}}}
+      }]
     },
     "integration_data": {
       "type": "object",

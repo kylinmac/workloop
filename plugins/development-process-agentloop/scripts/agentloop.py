@@ -243,6 +243,7 @@ def controlled_payload(root: Path, loop: dict) -> dict:
         payload["reasoning_control"] = {
             "assumptions": loop.get("assumptions", []),
             "decision_records": loop.get("decision_records", []),
+            "knowledge_state": loop.get("knowledge_state", empty_knowledge_state()),
         }
     development_states = {
         "development_preparing", "developing", "ready_for_verification",
@@ -519,6 +520,8 @@ def reasoning_control_errors(loop: dict) -> list[str]:
         missing.append("assumptions")
     if "decision_records" not in loop:
         missing.append("decision_records")
+    if "knowledge_state" not in loop:
+        missing.append("knowledge_state")
     routing = loop.get("routing", {})
     if "risk_driver" not in routing:
         missing.append("routing.risk_driver")
@@ -529,6 +532,34 @@ def reasoning_control_errors(loop: dict) -> list[str]:
             f"reasoning control fields require `agentloop migrate-v2`: {sorted(missing)}"
         ]
     return []
+
+
+def empty_knowledge_state() -> dict:
+    return {"known": [], "unknowns": [], "conflicts": []}
+
+
+def blocking_knowledge_ids(loop: dict, impacts: set[str] | None = None) -> list[str]:
+    knowledge = loop.get("knowledge_state", empty_knowledge_state())
+    blocked = []
+    for bucket in ("unknowns", "conflicts"):
+        for item in knowledge.get(bucket, []):
+            if item.get("status") != "open" or item.get("impact") == "non_blocking":
+                continue
+            if impacts is None or item.get("impact") in impacts:
+                blocked.append(item["knowledge_id"])
+    return blocked
+
+
+def knowledge_state_errors(loop: dict) -> list[str]:
+    knowledge = loop.get("knowledge_state")
+    if not isinstance(knowledge, dict):
+        return []
+    ids = [
+        item.get("knowledge_id")
+        for bucket in ("known", "unknowns", "conflicts")
+        for item in knowledge.get(bucket, [])
+    ]
+    return ["knowledge_id values must be unique across all knowledge kinds"] if len(ids) != len(set(ids)) else []
 
 
 def acceptance_requirement_errors(loop: dict) -> list[str]:
@@ -1452,6 +1483,10 @@ def runtime_semantic_errors(root: Path, loops: list[dict], flows: dict[str, dict
             f"{loop.get('loop_id')}: {error}"
             for error in reasoning_control_errors(loop)
         )
+        errors.extend(
+            f"{loop.get('loop_id')}: {error}"
+            for error in knowledge_state_errors(loop)
+        )
         gate_ids = set()
         if loop.get("state") not in {"draft", "clarifying", "awaiting_requirement_confirmation"}:
             gate_ids.add("requirement_confirmation")
@@ -1633,6 +1668,7 @@ def base_loop(
         "acceptance_obligations": [],
         "assumptions": [],
         "decision_records": [],
+        "knowledge_state": empty_knowledge_state(),
         "prototype": {
             "implementation_basis": False,
             "type": None,
@@ -2026,6 +2062,7 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     reasoning_complete = (
         "assumptions" in loop
         and "decision_records" in loop
+        and "knowledge_state" in loop
         and "risk_driver" in routing
         and (risk_driver is None or "secondary_risks" in risk_driver)
     )
@@ -2043,6 +2080,7 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     loop["acceptance_obligations"] = []
     loop.setdefault("assumptions", [])
     loop.setdefault("decision_records", [])
+    loop.setdefault("knowledge_state", empty_knowledge_state())
     profile = loop["execution_profile"]
     profile["status"] = "provisional"
     profile["qualifications"] = {
@@ -2207,9 +2245,26 @@ def context_projection(root: Path, path: Path, loop: dict, subflow_id: str | Non
     if subflow is not None:
         result["focus"] = {"kind": "subflow", **subflow_context(subflow)}
 
+    phase_impacts = {
+        "requirements": {"non_blocking", "routing", "acceptance", "implementation", "verification"},
+        "development": {"routing", "acceptance", "implementation"},
+        "verification": {"acceptance", "implementation", "verification"},
+        "integration": {"implementation", "verification"},
+        "completion": {"acceptance", "verification"},
+        "recovery": {"non_blocking", "routing", "acceptance", "implementation", "verification"},
+    }[phase]
+    knowledge = loop.get("knowledge_state", empty_knowledge_state())
+    projected_knowledge = {
+        bucket: [
+            item for item in knowledge.get(bucket, [])
+            if item.get("impact") in phase_impacts
+        ]
+        for bucket in ("known", "unknowns", "conflicts")
+    }
     result["reasoning_control"] = {
         "assumptions": loop.get("assumptions", []),
         "decision_records": loop.get("decision_records", []),
+        "knowledge_state": projected_knowledge,
     }
 
     acceptance = acceptance_context(loop, subflow_id)
@@ -2361,6 +2416,9 @@ def cmd_route(args: argparse.Namespace) -> None:
     ]
     if blocking:
         raise ValueError(f"routing has unresolved blocking assumptions: {blocking}")
+    knowledge_blocking = blocking_knowledge_ids(loop, {"routing"})
+    if knowledge_blocking:
+        raise ValueError(f"routing has unresolved knowledge: {knowledge_blocking}")
     expected_flow = RISK_FLOW_MAP[args.risk_category]
     if args.main_flow != expected_flow:
         raise ValueError(
@@ -2563,6 +2621,89 @@ def cmd_decision(args: argparse.Namespace) -> None:
     errors = list(schema_validator("loop.schema.json").iter_errors(loop))
     if errors:
         raise ValueError(f"decision invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_knowledge(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    migration_errors = reasoning_control_errors(loop)
+    if migration_errors:
+        raise ValueError("; ".join(migration_errors))
+    knowledge = loop.setdefault("knowledge_state", empty_knowledge_state())
+    bucket = {"known": "known", "unknown": "unknowns", "conflict": "conflicts"}[args.kind]
+    item = next(
+        (value for value in knowledge[bucket] if value["knowledge_id"] == args.knowledge_id),
+        None,
+    )
+    if any(
+        value["knowledge_id"] == args.knowledge_id
+        for other_bucket in ("known", "unknowns", "conflicts")
+        if other_bucket != bucket
+        for value in knowledge[other_bucket]
+    ):
+        raise ValueError("knowledge_id already exists with a different kind")
+    if item is None and (not args.statement or not args.impact):
+        raise ValueError("new knowledge requires --statement and --impact")
+
+    if args.kind == "known":
+        sources = args.source if args.source is not None else (item or {}).get("sources", [])
+        if not sources:
+            raise ValueError("known knowledge requires at least one --source")
+        value = {
+            "knowledge_id": args.knowledge_id,
+            "statement": args.statement or item["statement"],
+            "impact": args.impact or item["impact"],
+            "sources": list(dict.fromkeys(sources)),
+            "owner": args.actor,
+            "updated_at": now(),
+        }
+    else:
+        status = args.status or (item or {}).get("status", "open")
+        resolution = args.resolution if args.resolution is not None else (item or {}).get("resolution")
+        evidence = args.evidence if args.evidence is not None else (item or {}).get("evidence", [])
+        if status == "resolved" and (not resolution or not evidence):
+            raise ValueError("resolved knowledge requires --resolution and --evidence")
+        if status == "open":
+            resolution = None
+            evidence = []
+        value = {
+            "knowledge_id": args.knowledge_id,
+            "impact": args.impact or item["impact"],
+            "status": status,
+            "resolution": resolution,
+            "evidence": evidence,
+            "owner": args.actor,
+            "updated_at": now(),
+        }
+        if args.kind == "unknown":
+            value["question"] = args.statement or item["question"]
+        else:
+            claims = []
+            for raw in args.source_claim or []:
+                try:
+                    claim = json.loads(raw)
+                except json.JSONDecodeError as error:
+                    raise ValueError(f"invalid --source-claim JSON: {error.msg}") from error
+                if not isinstance(claim, dict) or set(claim) != {"source", "claim"}:
+                    raise ValueError("--source-claim requires source and claim")
+                claims.append(claim)
+            claims = claims or (item or {}).get("claims", [])
+            if len(claims) < 2:
+                raise ValueError("conflicting knowledge requires at least two --source-claim values")
+            value["statement"] = args.statement or item["statement"]
+            value["claims"] = claims
+    if item is None:
+        knowledge[bucket].append(value)
+    else:
+        item.clear()
+        item.update(value)
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"knowledge invalid at {errors[0].json_path}: {errors[0].message}")
     with loop_lock(root, args.loop_id, args.actor):
         atomic_yaml(path, loop)
         write_control_snapshot(root, loop)
@@ -2913,6 +3054,20 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
     errors = [] if target in allowed else [f"illegal transition: {current} -> {target}"]
     if target != "cancelled":
         errors.extend(reasoning_control_errors(loop))
+    knowledge_impacts = {
+        "awaiting_requirement_confirmation": {"routing", "acceptance"},
+        "development_preparing": {"routing", "acceptance", "implementation"},
+        "orchestrating": {"routing", "acceptance", "implementation", "verification"},
+        "developing": {"implementation"},
+        "ready_for_verification": {"acceptance", "implementation", "verification"},
+        "verifying": {"acceptance", "verification"},
+        "verified": {"acceptance", "verification"},
+        "done": {"acceptance", "verification"},
+    }.get(target)
+    if knowledge_impacts:
+        blocked_knowledge = blocking_knowledge_ids(loop, knowledge_impacts)
+        if blocked_knowledge:
+            errors.append(f"transition has unresolved knowledge: {blocked_knowledge}")
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
@@ -3698,6 +3853,20 @@ def parser() -> argparse.ArgumentParser:
     decision.add_argument("--evidence", action="append", required=True)
     decision.add_argument("--rationale", required=True)
     decision.set_defaults(func=cmd_decision)
+
+    knowledge = commands.add_parser("knowledge")
+    knowledge.add_argument("loop_id")
+    knowledge.add_argument("--knowledge-id", required=True)
+    knowledge.add_argument("--kind", choices=["known", "unknown", "conflict"], required=True)
+    knowledge.add_argument("--actor", required=True)
+    knowledge.add_argument("--statement")
+    knowledge.add_argument("--impact", choices=["non_blocking", "routing", "acceptance", "implementation", "verification"])
+    knowledge.add_argument("--source", action="append")
+    knowledge.add_argument("--source-claim", action="append")
+    knowledge.add_argument("--status", choices=["open", "resolved"])
+    knowledge.add_argument("--resolution")
+    knowledge.add_argument("--evidence", action="append")
+    knowledge.set_defaults(func=cmd_knowledge)
 
     acceptance_plan = commands.add_parser("acceptance-plan")
     acceptance_plan.add_argument("loop_id")
