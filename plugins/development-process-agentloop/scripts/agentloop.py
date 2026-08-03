@@ -237,7 +237,7 @@ def controlled_payload(root: Path, loop: dict) -> dict:
             key: loop.get(key)
             for key in (
                 "classification", "acceptance_obligations", "execution_profile",
-                "prototype", "integration_data",
+                "prototype", "integration_data", "collaboration_contract",
             )
         }
         payload["reasoning_control"] = {
@@ -493,6 +493,86 @@ def integration_data_declaration_errors(loop: dict) -> list[str]:
     return []
 
 
+def collaboration_contract_declaration_errors(loop: dict) -> list[str]:
+    declaration = loop.get("collaboration_contract")
+    if not isinstance(declaration, dict) or not isinstance(declaration.get("required"), bool):
+        return ["collaboration contract requirement must be explicitly declared"]
+    return []
+
+
+def collaboration_contract_errors(root: Path, loop: dict) -> list[str]:
+    declaration_errors = collaboration_contract_declaration_errors(loop)
+    if declaration_errors:
+        return declaration_errors
+    declaration = loop["collaboration_contract"]
+    if not declaration["required"]:
+        return []
+    errors = []
+    if declaration.get("status") != "confirmed":
+        errors.append("collaboration contract is not confirmed")
+    relative = declaration.get("file")
+    contract_path = project_file(root, relative) if relative else None
+    if contract_path is None or not contract_path.is_file():
+        return errors + [f"collaboration contract does not exist: {relative}"]
+    try:
+        contract = load_yaml(contract_path)
+    except (ValueError, OSError) as error:
+        return errors + [f"collaboration contract cannot be read: {error}"]
+    schema_errors = list(schema_validator("development-contract.schema.json").iter_errors(contract))
+    if schema_errors:
+        errors.append(
+            f"collaboration contract invalid at {schema_errors[0].json_path}: {schema_errors[0].message}"
+        )
+        return errors
+    if contract["loop_id"] != loop["loop_id"]:
+        errors.append("collaboration contract loop_id does not match")
+    if contract["requirement_version"] != loop["requirement_version"]:
+        errors.append("collaboration contract requirement_version does not match")
+    if contract["status"] != "confirmed":
+        errors.append("development contract status is not confirmed")
+    participant_values = [item["actor"] for item in contract["participants"]]
+    participants = set(participant_values)
+    if len(participant_values) != len(participants):
+        errors.append("collaboration contract participant actors must be unique")
+    consumers = set(declaration.get("consumers", []))
+    if participants != consumers:
+        errors.append("collaboration contract participants do not match declared consumers")
+    if set(declaration.get("confirmed_by", [])) != consumers:
+        errors.append("collaboration contract is not confirmed by every consumer")
+    actual_digest = hashlib.sha256(contract_path.read_bytes()).hexdigest()
+    if declaration.get("digest") != actual_digest:
+        errors.append("collaboration contract changed after confirmation")
+    ids = [
+        item["contract_id"]
+        for section in ("api", "data", "behavior", "acceptance")
+        for item in contract[section]
+    ]
+    if len(ids) != len(set(ids)):
+        errors.append("collaboration contract IDs must be unique")
+    for item in contract["api"]:
+        for section in ("request", "response"):
+            names = [field["name"] for field in item[section]]
+            if len(names) != len(set(names)):
+                errors.append(f"{item['contract_id']}: {section} field names must be unique")
+        codes = [error["code"] for error in item["errors"]]
+        if len(codes) != len(set(codes)):
+            errors.append(f"{item['contract_id']}: error codes must be unique")
+    for item in contract["data"]:
+        values = [str(value["value"]) for value in item["values"]]
+        if len(values) != len(set(values)):
+            errors.append(f"{item['contract_id']}: data values must be unique")
+    acceptance_ids = {item["acceptance_id"] for item in loop.get("acceptance_obligations", [])}
+    mapped_acceptance = {
+        acceptance_id
+        for item in contract["acceptance"]
+        for acceptance_id in item["acceptance_ids"]
+    }
+    unknown = mapped_acceptance - acceptance_ids
+    if unknown:
+        errors.append(f"collaboration contract has unknown acceptance IDs: {sorted(unknown)}")
+    return errors
+
+
 def classification_errors(loop: dict) -> list[str]:
     classification = loop.get("classification", {})
     if classification.get("control_version", 1) < 2:
@@ -528,6 +608,8 @@ def reasoning_control_errors(loop: dict) -> list[str]:
         missing.append("quality_metrics")
     if "failure_memory" not in loop:
         missing.append("failure_memory")
+    if "collaboration_contract" not in loop:
+        missing.append("collaboration_contract")
     routing = loop.get("routing", {})
     if "risk_driver" not in routing:
         missing.append("routing.risk_driver")
@@ -871,6 +953,57 @@ def integration_data_verification_errors(
             return errors
         candidate_errors.extend(run_errors)
     return errors + candidate_errors
+
+
+def collaboration_contract_verification_errors(root: Path, loop: dict) -> list[str]:
+    errors = collaboration_contract_errors(root, loop)
+    declaration = loop.get("collaboration_contract", {})
+    if errors or not declaration.get("required"):
+        return errors
+    contract_path = project_file(root, declaration["file"])
+    contract = load_yaml(contract_path)
+    expected = {
+        item["contract_id"]: section
+        for section in ("api", "data", "behavior", "acceptance")
+        for item in contract[section]
+    }
+    evidence_path = loop_dir(root, loop["loop_id"]) / loop.get("files", {}).get("evidence", "evidence.yaml")
+    evidence = load_yaml(evidence_path) if evidence_path.is_file() else {"runs": []}
+    current_commit = run_git(root, "rev-parse", "HEAD")
+    candidates = [
+        run for run in evidence.get("runs", [])
+        if run.get("requirement_version") == loop["requirement_version"]
+        and run.get("validity") == "active"
+        and run.get("result") == "passed"
+        and run.get("code_commit") == current_commit
+        and run.get("contract_consistency")
+    ]
+    if not candidates:
+        return ["no active passed collaboration contract evidence for the current commit"]
+    candidate_errors = []
+    for run in candidates:
+        report = run["contract_consistency"]
+        run_errors = []
+        if report.get("contract_digest") != declaration["digest"]:
+            run_errors.append("contract digest does not match the confirmed contract")
+        if set(report.get("participants", [])) != set(declaration["consumers"]):
+            run_errors.append("checked participants do not match contract consumers")
+        checks = {item.get("contract_id"): item for item in report.get("checks", [])}
+        if set(checks) != set(expected):
+            run_errors.append("contract consistency coverage is incomplete")
+        for contract_id, kind in expected.items():
+            check = checks.get(contract_id)
+            if not check or check.get("kind") != kind or check.get("result") != "passed":
+                run_errors.append(f"contract consistency check failed: {contract_id}")
+                continue
+            for relative in check.get("providers", []) + check.get("consumers", []):
+                path = project_file(root, relative)
+                if path is None or not path.is_file():
+                    run_errors.append(f"contract implementation path is missing: {relative}")
+        if not run_errors:
+            return []
+        candidate_errors.append(f"evidence {run.get('evidence_id')}: " + "; ".join(run_errors))
+    return candidate_errors
 
 
 def load_prototype_matrix(
@@ -1781,6 +1914,16 @@ def base_loop(
             "database_objects": [],
             "verification_flow_id": None,
         },
+        "collaboration_contract": {
+            "required": None,
+            "reason": "待需求确认前显式判断是否存在多 Agent 共享契约",
+            "file": None,
+            "status": "pending",
+            "digest": None,
+            "consumers": [],
+            "confirmed_by": [],
+            "updated_at": now(),
+        },
         "scope": {
             "claim": "active",
             "claimed_at": now(),
@@ -2163,6 +2306,7 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
         and "knowledge_state" in loop
         and "quality_metrics" in loop
         and "failure_memory" in loop
+        and "collaboration_contract" in loop
         and "risk_driver" in routing
         and (risk_driver is None or "secondary_risks" in risk_driver)
     )
@@ -2183,6 +2327,16 @@ def cmd_migrate_v2(args: argparse.Namespace) -> None:
     loop.setdefault("knowledge_state", empty_knowledge_state())
     loop.setdefault("quality_metrics", [])
     loop.setdefault("failure_memory", [])
+    loop.setdefault("collaboration_contract", {
+        "required": None,
+        "reason": "迁移后必须重新判断是否存在多 Agent 共享契约",
+        "file": None,
+        "status": "pending",
+        "digest": None,
+        "consumers": [],
+        "confirmed_by": [],
+        "updated_at": now(),
+    })
     profile = loop["execution_profile"]
     profile["status"] = "provisional"
     profile["qualifications"] = {
@@ -2373,6 +2527,12 @@ def context_projection(root: Path, path: Path, loop: dict, subflow_id: str | Non
             "quality_metrics": loop.get("quality_metrics", []),
             "failure_memory": loop.get("failure_memory", []),
         }
+    result["collaboration_contract"] = loop.get("collaboration_contract")
+    declaration = loop.get("collaboration_contract", {})
+    if phase in {"development", "verification", "integration", "completion", "recovery"} and declaration.get("required"):
+        contract_path = project_file(root, declaration.get("file"))
+        if contract_path is not None and contract_path.is_file():
+            result["development_contract"] = load_yaml(contract_path)
 
     acceptance = acceptance_context(loop, subflow_id)
     if phase == "requirements":
@@ -2936,6 +3096,75 @@ def cmd_failure_memory(args: argparse.Namespace) -> None:
         write_control_snapshot(root, loop)
 
 
+def cmd_contract_declare(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    if loop["state"] not in {"draft", "clarifying", "ready_for_development", "development_preparing"}:
+        raise ValueError("collaboration contract can only be declared before development")
+    consumers = list(dict.fromkeys(args.consumer or []))
+    if args.required and len(consumers) < 2:
+        raise ValueError("required collaboration contract needs at least two --consumer values")
+    relative = (
+        args.file or f".agentloop/loops/{args.loop_id}/development-contract.yaml"
+        if args.required else None
+    )
+    loop["collaboration_contract"] = {
+        "required": args.required,
+        "reason": args.reason,
+        "file": relative,
+        "status": "draft" if args.required else "not_required",
+        "digest": None,
+        "consumers": consumers if args.required else [],
+        "confirmed_by": [],
+        "updated_at": now(),
+    }
+    if args.required:
+        loop.setdefault("files", {})["development_contract"] = relative
+    else:
+        loop.setdefault("files", {}).pop("development_contract", None)
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"collaboration declaration invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_contract_confirm(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    declaration = loop.get("collaboration_contract", {})
+    if not declaration.get("required"):
+        raise ValueError("collaboration contract is not required")
+    if loop["state"] not in {"clarifying", "ready_for_development", "development_preparing"}:
+        raise ValueError("collaboration contract must be confirmed before development")
+    contract_path = project_file(root, declaration.get("file"))
+    if contract_path is None or not contract_path.is_file():
+        raise ValueError("collaboration contract file does not exist")
+    contract = load_yaml(contract_path)
+    errors = list(schema_validator("development-contract.schema.json").iter_errors(contract))
+    if errors:
+        raise ValueError(f"collaboration contract invalid at {errors[0].json_path}: {errors[0].message}")
+    confirmed_by = set(args.confirmed_by or [])
+    consumers = set(declaration["consumers"])
+    if confirmed_by != consumers:
+        raise ValueError("--confirmed-by must exactly cover every contract consumer")
+    contract["status"] = "confirmed"
+    atomic_yaml(contract_path, contract)
+    declaration["status"] = "confirmed"
+    declaration["digest"] = hashlib.sha256(contract_path.read_bytes()).hexdigest()
+    declaration["confirmed_by"] = sorted(confirmed_by)
+    declaration["updated_at"] = now()
+    loop["updated_at"] = now()
+    semantic_errors = collaboration_contract_errors(root, loop)
+    if semantic_errors:
+        raise ValueError("; ".join(semantic_errors))
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
 def cmd_acceptance_plan(args: argparse.Namespace) -> None:
     root = git_root(Path(args.root).resolve())
     path, loop = load_loop(root, args.loop_id)
@@ -3253,6 +3482,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
                 errors.extend(integration_data_verification_errors(
                     child_root, child_loop, runtime_flows(child_root)
                 ))
+                errors.extend(collaboration_contract_verification_errors(child_root, child_loop))
     else:
         for subflow in loop["subflows"]:
             if subflow["state"] == "skipped" and subflow.get("skip_reason"):
@@ -3270,6 +3500,7 @@ def aggregation_errors(root: Path, loop: dict) -> list[str]:
         errors.append("integration_verification is not complete")
     errors.extend(acceptance_verification_errors(root, loop))
     errors.extend(integration_data_verification_errors(root, loop, flows))
+    errors.extend(collaboration_contract_verification_errors(root, loop))
     return errors
 
 
@@ -3297,9 +3528,11 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append(f"transition has unresolved knowledge: {blocked_knowledge}")
     if target in {"verified", "done"}:
         errors.extend(learning_control_errors(root, loop, completion=True))
+        errors.extend(collaboration_contract_verification_errors(root, loop))
     if target == "awaiting_requirement_confirmation":
         errors.extend(prototype_declaration_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
+        errors.extend(collaboration_contract_declaration_errors(loop))
         errors.extend(classification_errors(loop))
         errors.extend(execution_profile_errors(root, loop))
         errors.extend(acceptance_requirement_errors(loop))
@@ -3310,6 +3543,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
             errors.append("execution_profile is not confirmed")
         errors.extend(gate_subject_errors(root, loop, {"requirement_confirmation"}))
     if target in {"development_preparing", "orchestrating"}:
+        errors.extend(collaboration_contract_errors(root, loop))
         if loop["routing"]["status"] != "decided":
             errors.append("routing is not decided")
         if not loop["git"]["baseline_commit"]:
@@ -3322,6 +3556,7 @@ def transition_errors(root: Path, loop: dict, target: str, evidence: list[str]) 
         if target == "orchestrating":
             errors.extend(development_assurance_errors(root, loop))
     if target == "developing":
+        errors.extend(collaboration_contract_errors(root, loop))
         errors.extend(prototype_preparation_errors(root, loop))
         errors.extend(prototype_business_preparation_errors(root, loop))
         errors.extend(integration_data_declaration_errors(loop))
@@ -3383,6 +3618,7 @@ def subflow_transition_errors(root: Path, loop: dict, subflow: dict, target: str
     if loop["state"] != "orchestrating":
         errors.append("subflow transitions require parent state orchestrating")
     if target == "developing":
+        errors.extend(collaboration_contract_errors(root, loop))
         errors.extend(prototype_preparation_errors(root, loop, subflow))
         errors.extend(prototype_business_preparation_errors(root, loop, subflow))
         errors.extend(development_assurance_errors(root, loop, subflow))
@@ -3768,7 +4004,10 @@ def cmd_evidence(args: argparse.Namespace) -> None:
             "executed_steps": report["executed_steps"],
             "skipped_required": report["skipped_required"],
         }
-        for key in ("visual", "data_lineage", "business_function", "navigation"):
+        for key in (
+            "visual", "data_lineage", "contract_consistency",
+            "business_function", "navigation",
+        ):
             if report.get(key) is not None:
                 run[key] = report[key]
     for previous in evidence["runs"]:
@@ -3979,7 +4218,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         raise ValueError("missing plugin assets: " + ", ".join(missing))
     for name in (
         "project", "loop", "flow", "evidence", "prototype-matrix",
-        "prototype-behavior-inventory", "development-assurance",
+        "prototype-behavior-inventory", "development-assurance", "development-contract",
     ):
         schema_validator(f"{name}.schema.json")
     project_path = Path(args.root).resolve() / ".agentloop" / "project.yaml"
@@ -4128,6 +4367,23 @@ def parser() -> argparse.ArgumentParser:
     failure_memory.add_argument("--status", choices=["open", "prevention_verified"])
     failure_memory.add_argument("--verification-evidence", action="append")
     failure_memory.set_defaults(func=cmd_failure_memory)
+
+    contract_declare = commands.add_parser("contract-declare")
+    contract_declare.add_argument("loop_id")
+    contract_declare.add_argument("--actor", required=True)
+    contract_requirement = contract_declare.add_mutually_exclusive_group(required=True)
+    contract_requirement.add_argument("--required", dest="required", action="store_true")
+    contract_requirement.add_argument("--not-required", dest="required", action="store_false")
+    contract_declare.add_argument("--reason", required=True)
+    contract_declare.add_argument("--file")
+    contract_declare.add_argument("--consumer", action="append")
+    contract_declare.set_defaults(func=cmd_contract_declare)
+
+    contract_confirm = commands.add_parser("contract-confirm")
+    contract_confirm.add_argument("loop_id")
+    contract_confirm.add_argument("--actor", required=True)
+    contract_confirm.add_argument("--confirmed-by", action="append", required=True)
+    contract_confirm.set_defaults(func=cmd_contract_confirm)
 
     acceptance_plan = commands.add_parser("acceptance-plan")
     acceptance_plan.add_argument("loop_id")

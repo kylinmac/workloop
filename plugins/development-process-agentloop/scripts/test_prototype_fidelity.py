@@ -121,6 +121,15 @@ def main() -> None:
         loop_dir = root / ".agentloop" / "loops" / loop_id
         loop_path = loop_dir / "loop.yaml"
         loop = yaml.safe_load(loop_path.read_text())
+        loop["collaboration_contract"].update({
+            "required": False,
+            "reason": "原型保真测试没有跨 Agent 共享边界",
+            "file": None,
+            "status": "not_required",
+            "digest": None,
+            "consumers": [],
+            "confirmed_by": [],
+        })
         pages = [page(index) for index in range(1, 4)]
         loop["classification"].update({
             "primary_type": "内部改进",

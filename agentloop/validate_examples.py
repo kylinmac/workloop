@@ -20,6 +20,7 @@ CASES = {
     "evidence.schema.json": ["evidence.yaml", "ui-visual.evidence.yaml"],
     "prototype-matrix.schema.json": ["prototype-matrix.yaml"],
     "development-assurance.schema.json": ["development-assurance.yaml"],
+    "development-contract.schema.json": ["development-contract.yaml"],
     "loop.schema.json": [
         "trivial.loop.yaml",
         "standard.loop.yaml",

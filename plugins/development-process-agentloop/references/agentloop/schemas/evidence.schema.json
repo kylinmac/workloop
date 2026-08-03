@@ -140,6 +140,32 @@
               }
             }
           },
+          "contract_consistency": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["contract_digest", "participants", "checks", "violations"],
+            "properties": {
+              "contract_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "participants": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+              "checks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["contract_id", "kind", "providers", "consumers", "result"],
+                  "properties": {
+                    "contract_id": {"type": "string", "pattern": "^(API|DATA|BEH|ACC)-[0-9]{2,}$"},
+                    "kind": {"enum": ["api", "data", "behavior", "acceptance"]},
+                    "providers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                    "consumers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                    "result": {"const": "passed"}
+                  }
+                }
+              },
+              "violations": {"type": "array", "maxItems": 0}
+            }
+          },
           "test_report": {
             "type": "object",
             "additionalProperties": false,
