@@ -21,6 +21,9 @@ from datetime import datetime
 from pathlib import Path
 
 VENDOR_ROOT = Path(__file__).resolve().parents[1] / "vendor"
+SCRIPT_ROOT = Path(__file__).resolve().parent
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
 if VENDOR_ROOT.is_dir():
     sys.path.insert(0, str(VENDOR_ROOT))
 
@@ -98,6 +101,17 @@ ROUTE_ASSURANCE_OBLIGATIONS = {
     "root-cause": {"reproduction", "failing-regression"},
     "migration-compatibility": {"inventory", "compatibility", "rollback-or-approval"},
     "technical-validation": {"hypothesis", "thresholds", "experiment"},
+}
+RISK_FLOW_MAP = {
+    "localized-change": "quick-change",
+    "user-experience": "product-prototype",
+    "business-workflow": "business-process",
+    "data-contract": "data-contract",
+    "domain-rules": "domain-model",
+    "system-boundary": "architecture",
+    "root-cause": "root-cause",
+    "migration-compatibility": "migration-compatibility",
+    "technical-feasibility": "technical-validation",
 }
 
 STATE_PHASES = {
@@ -225,6 +239,10 @@ def controlled_payload(root: Path, loop: dict) -> dict:
                 "classification", "acceptance_obligations", "execution_profile",
                 "prototype", "integration_data",
             )
+        }
+        payload["reasoning_control"] = {
+            "assumptions": loop.get("assumptions", []),
+            "decision_records": loop.get("decision_records", []),
         }
     development_states = {
         "development_preparing", "developing", "ready_for_verification",
@@ -1589,6 +1607,8 @@ def base_loop(
             "obligations": [],
         },
         "acceptance_obligations": [],
+        "assumptions": [],
+        "decision_records": [],
         "prototype": {
             "implementation_basis": False,
             "type": None,
@@ -1648,6 +1668,7 @@ def base_loop(
             "confidence": "medium",
             "decided_at": None,
             "decided_by": None,
+            "risk_driver": None,
             "development": {
                 "main_flow": main_flow,
                 "reason": "待需求确认后根据主要不确定性决定",
@@ -2148,6 +2169,11 @@ def context_projection(root: Path, path: Path, loop: dict, subflow_id: str | Non
     if subflow is not None:
         result["focus"] = {"kind": "subflow", **subflow_context(subflow)}
 
+    result["reasoning_control"] = {
+        "assumptions": loop.get("assumptions", []),
+        "decision_records": loop.get("decision_records", []),
+    }
+
     acceptance = acceptance_context(loop, subflow_id)
     if phase == "requirements":
         result.update({
@@ -2288,6 +2314,18 @@ def cmd_route(args: argparse.Namespace) -> None:
     path, loop = load_loop(root, args.loop_id)
     if loop["state"] not in {"ready_for_development", "development_preparing"}:
         raise ValueError("routing is only allowed in ready_for_development or development_preparing")
+    blocking = [
+        item["assumption_id"] for item in loop.get("assumptions", [])
+        if item["status"] == "unverified" and item["impact"] != "non_blocking"
+    ]
+    if blocking:
+        raise ValueError(f"routing has unresolved blocking assumptions: {blocking}")
+    expected_flow = RISK_FLOW_MAP[args.risk_category]
+    if args.main_flow != expected_flow:
+        raise ValueError(
+            f"risk category {args.risk_category} requires main flow {expected_flow}; "
+            f"got {args.main_flow}"
+        )
     with loop_lock(root, args.loop_id, args.actor):
         loop["routing"].update(
             {
@@ -2295,6 +2333,12 @@ def cmd_route(args: argparse.Namespace) -> None:
                 "confidence": args.confidence,
                 "decided_at": now(),
                 "decided_by": args.actor,
+                "risk_driver": {
+                    "category": args.risk_category,
+                    "statement": args.risk_statement,
+                    "evidence": args.risk_evidence,
+                    "severity": args.risk_severity,
+                },
             }
         )
         loop["routing"]["development"].update(
@@ -2360,6 +2404,69 @@ def cmd_route(args: argparse.Namespace) -> None:
         errors = list(schema_validator("loop.schema.json").iter_errors(loop))
         if errors:
             raise ValueError(f"routing invalid at {errors[0].json_path}: {errors[0].message}")
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_assumption(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    items = loop.setdefault("assumptions", [])
+    item = next((value for value in items if value["assumption_id"] == args.assumption_id), None)
+    if item is None:
+        if not args.statement or not args.impact:
+            raise ValueError("new assumption requires --statement and --impact")
+        item = {
+            "assumption_id": args.assumption_id,
+            "statement": args.statement,
+            "impact": args.impact,
+            "status": args.status,
+            "owner": args.actor,
+            "evidence": args.evidence,
+            "updated_at": now(),
+        }
+        items.append(item)
+    else:
+        if args.statement:
+            item["statement"] = args.statement
+        if args.impact:
+            item["impact"] = args.impact
+        item.update(status=args.status, owner=args.actor, evidence=args.evidence, updated_at=now())
+    if args.status != "unverified" and not args.evidence:
+        raise ValueError("confirmed or rejected assumption requires --evidence")
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"assumption invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
+        atomic_yaml(path, loop)
+        write_control_snapshot(root, loop)
+
+
+def cmd_decision(args: argparse.Namespace) -> None:
+    root = git_root(Path(args.root).resolve())
+    path, loop = load_loop(root, args.loop_id)
+    options = list(dict.fromkeys(args.option))
+    if args.selected not in options:
+        raise ValueError("--selected must be one of --option")
+    records = loop.setdefault("decision_records", [])
+    if any(item["decision_id"] == args.decision_id for item in records):
+        raise ValueError(f"decision already exists: {args.decision_id}")
+    records.append({
+        "decision_id": args.decision_id,
+        "question": args.question,
+        "options": options,
+        "selected": args.selected,
+        "evidence": args.evidence,
+        "rationale": args.rationale,
+        "actor": args.actor,
+        "decided_at": now(),
+    })
+    loop["updated_at"] = now()
+    errors = list(schema_validator("loop.schema.json").iter_errors(loop))
+    if errors:
+        raise ValueError(f"decision invalid at {errors[0].json_path}: {errors[0].message}")
+    with loop_lock(root, args.loop_id, args.actor):
         atomic_yaml(path, loop)
         write_control_snapshot(root, loop)
 
@@ -3454,11 +3561,36 @@ def parser() -> argparse.ArgumentParser:
         "technical-validation",
     ], required=True)
     route.add_argument("--reason", required=True)
+    route.add_argument("--risk-category", choices=sorted(RISK_FLOW_MAP), required=True)
+    route.add_argument("--risk-statement", required=True)
+    route.add_argument("--risk-evidence", required=True)
+    route.add_argument("--risk-severity", choices=["low", "medium", "high"], required=True)
     route.add_argument("--supporting-flow", action="append")
     route.add_argument("--required-output", action="append")
     route.add_argument("--verification", choices=["self_check", "targeted", "flow"], required=True)
     route.add_argument("--verification-reason", required=True)
     route.set_defaults(func=cmd_route)
+
+    assumption = commands.add_parser("assumption")
+    assumption.add_argument("loop_id")
+    assumption.add_argument("--assumption-id", required=True)
+    assumption.add_argument("--actor", required=True)
+    assumption.add_argument("--statement")
+    assumption.add_argument("--impact", choices=["non_blocking", "routing", "acceptance", "implementation", "verification"])
+    assumption.add_argument("--status", choices=["unverified", "confirmed", "rejected"], required=True)
+    assumption.add_argument("--evidence")
+    assumption.set_defaults(func=cmd_assumption)
+
+    decision = commands.add_parser("decision")
+    decision.add_argument("loop_id")
+    decision.add_argument("--decision-id", required=True)
+    decision.add_argument("--actor", required=True)
+    decision.add_argument("--question", required=True)
+    decision.add_argument("--option", action="append", required=True)
+    decision.add_argument("--selected", required=True)
+    decision.add_argument("--evidence", action="append", required=True)
+    decision.add_argument("--rationale", required=True)
+    decision.set_defaults(func=cmd_decision)
 
     acceptance_plan = commands.add_parser("acceptance-plan")
     acceptance_plan.add_argument("loop_id")

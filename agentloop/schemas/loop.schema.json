@@ -133,6 +133,8 @@
         }
       }
     },
+    "assumptions": {"type": "array", "items": {"$ref": "#/$defs/assumption"}},
+    "decision_records": {"type": "array", "items": {"$ref": "#/$defs/decision_record"}},
     "prototype": {"$ref": "#/$defs/prototype"},
     "integration_data": {"$ref": "#/$defs/integration_data"},
     "scope": {"$ref": "#/$defs/scope"},
@@ -298,6 +300,33 @@
     }
   ],
   "$defs": {
+    "assumption": {
+      "type": "object", "additionalProperties": false,
+      "required": ["assumption_id", "statement", "impact", "status", "owner", "evidence", "updated_at"],
+      "properties": {
+        "assumption_id": {"type": "string", "pattern": "^ASM-[0-9]{2,}$"},
+        "statement": {"type": "string", "minLength": 1},
+        "impact": {"enum": ["non_blocking", "routing", "acceptance", "implementation", "verification"]},
+        "status": {"enum": ["unverified", "confirmed", "rejected"]},
+        "owner": {"type": "string", "minLength": 1},
+        "evidence": {"type": ["string", "null"]},
+        "updated_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "decision_record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["decision_id", "question", "options", "selected", "evidence", "rationale", "actor", "decided_at"],
+      "properties": {
+        "decision_id": {"type": "string", "pattern": "^DEC-[0-9]{2,}$"},
+        "question": {"type": "string", "minLength": 1},
+        "options": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "selected": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "rationale": {"type": "string", "minLength": 1},
+        "actor": {"type": "string", "minLength": 1},
+        "decided_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "integration_data": {
       "type": "object",
       "additionalProperties": false,
@@ -504,6 +533,16 @@
         "confidence": {"enum": ["low", "medium", "high"]},
         "decided_at": {"type": ["string", "null"], "format": "date-time"},
         "decided_by": {"type": ["string", "null"]},
+        "risk_driver": {
+          "type": ["object", "null"], "additionalProperties": false,
+          "required": ["category", "statement", "evidence", "severity"],
+          "properties": {
+            "category": {"enum": ["localized-change", "user-experience", "business-workflow", "data-contract", "domain-rules", "system-boundary", "root-cause", "migration-compatibility", "technical-feasibility"]},
+            "statement": {"type": "string", "minLength": 1},
+            "evidence": {"type": "string", "minLength": 1},
+            "severity": {"enum": ["low", "medium", "high"]}
+          }
+        },
         "development": {
           "type": "object",
           "required": ["main_flow", "reason", "supporting_flows", "required_outputs"],
