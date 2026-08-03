@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop 控制层"
+  short_description: "检查门禁、契约、证据和工作项范围"
+  default_prompt: "检查活动 Workloop 门禁并生成工作项投影。"

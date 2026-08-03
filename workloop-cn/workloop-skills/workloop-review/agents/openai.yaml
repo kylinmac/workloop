@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop 独立审查"
+  short_description: "独立验证语义与证据"
+  default_prompt: "独立审查这个 Workloop 实现。"

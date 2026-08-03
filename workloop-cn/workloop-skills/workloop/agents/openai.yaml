@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop 中文版"
+  short_description: "运行轻量认知与证据闭环"
+  default_prompt: "使用 Workloop 组织并验证这个开发任务。"

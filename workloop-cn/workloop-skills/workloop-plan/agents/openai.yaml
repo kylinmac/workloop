@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop 计划"
+  short_description: "规划可验证工作项和共享契约"
+  default_prompt: "把这份 Workloop 需求说明转换为可执行计划。"

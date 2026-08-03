@@ -8,6 +8,9 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "workloop.py"
+REPOSITORY = Path(__file__).parents[2]
+TEMPLATES = REPOSITORY / "workloop-skills" / "workloop" / "assets" / "templates"
+EXAMPLE_LOOP = REPOSITORY / "workloop-skills" / "workloop" / "references" / "example-loop"
 SPEC = importlib.util.spec_from_file_location("workloop", SCRIPT)
 workloop = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader
@@ -147,6 +150,18 @@ class WorkloopTest(unittest.TestCase):
 
     def errors(self, target):
         return workloop.validate(self.loop, target)[0]
+
+    def test_canonical_templates_match_the_parser_contract(self):
+        parsed_spec = workloop.parse_spec((TEMPLATES / "spec.md").read_text(encoding="utf-8"))
+        parsed_plan = workloop.parse_plan((TEMPLATES / "plan.md").read_text(encoding="utf-8"))
+        self.assertEqual(list(parsed_spec["acceptance"]), ["AC1", "AC2"])
+        self.assertEqual(list(parsed_plan["contracts"]), ["CT1"])
+        self.assertEqual(list(parsed_plan["items"]), ["T1", "T2"])
+
+    def test_complete_example_passes_the_done_gate(self):
+        for name in ("spec.md", "plan.md", "review.md"):
+            (self.loop / name).write_text((EXAMPLE_LOOP / name).read_text(encoding="utf-8"), encoding="utf-8")
+        self.assertEqual(self.errors("done"), [])
 
     def test_valid_executing_loop(self):
         self.assertEqual(self.errors("executing"), [])

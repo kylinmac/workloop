@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop 执行"
+  short_description: "执行单个范围明确的工作项并采集证据"
+  default_prompt: "执行活动 Workloop 工作项并采集真实证据。"

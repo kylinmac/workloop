@@ -1,13 +1,13 @@
 # Workloop
 
-Workloop 是一套轻量的软件开发认知闭环：先固定意图、假设、风险和验收，再按工作项执行，用独立视角核对实现语义与真实证据，最后只沉淀可复用的失败教训。
+Workloop is a lightweight cognition-and-evidence loop for software development. It fixes intent, assumptions, risk, and acceptance before implementation; executes one scoped work item at a time; independently compares behavior with real evidence; and retains only reusable lessons from real failures.
 
-仓库只保留两个产品层：
+The repository has two executable layers:
 
-- `workloop-skills/`：方法层。六个可独立触发的 Skill 和四个 Markdown 模板，不依赖插件也能使用。
-- `workloop-plugin/`：控制层。提供工作项投影、可选共享 Contract、确定性 Gate 和最小 Hook。
+- `workloop-skills/`: the method layer. Six independently triggerable skills, four Markdown templates, and one complete example loop. It works without the plugin.
+- `workloop-plugin/`: the strict layer. It packages the method skills and adds work-item projection, optional shared Contracts, deterministic gates, and a minimal scope hook.
 
-项目运行时产物固定在：
+Runtime artifacts use this fixed layout:
 
 ```text
 .workloop/
@@ -18,9 +18,11 @@ Workloop 是一套轻量的软件开发认知闭环：先固定意图、假设�
     └── review.md
 ```
 
-原 AgentLoop、旧 Schema、历史问题清单、流程分类文档和大型控制器已经移除；需要追溯时使用 Git 历史。
+English is the canonical executable source. `workloop-cn/` is a complete Chinese reading companion with the same human-facing documents, skills, templates, and example paths. It is intentionally excluded from plugin discovery so the two languages cannot drift into competing runtime rules.
 
-## 快速验证
+The former AgentLoop, legacy schemas, historical issue catalog, process taxonomy, and large controller are available only through Git history.
+
+## Quick validation
 
 ```bash
 python3 workloop-plugin/scripts/workloop.py check --loop-dir .workloop/loops/<loop-id>
@@ -28,4 +30,4 @@ python3 workloop-plugin/scripts/workloop.py project --loop-dir .workloop/loops/<
 python3 -m unittest discover -s workloop-plugin/tests -v
 ```
 
-完整协议与职责边界见 `docs/protocol.md`。
+See `docs/protocol.md` for the complete protocol and responsibility boundary.

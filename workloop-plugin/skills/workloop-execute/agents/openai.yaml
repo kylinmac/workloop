@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop Execute"
+  short_description: "Execute one scoped work item with real evidence"
+  default_prompt: "Execute the active Workloop item and capture evidence."

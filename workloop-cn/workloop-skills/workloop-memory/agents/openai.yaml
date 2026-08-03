@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop 错误记忆"
+  short_description: "把可复用失败转化为预防检查"
+  default_prompt: "根据真实失败或审查结果更新 Workloop 记忆。"

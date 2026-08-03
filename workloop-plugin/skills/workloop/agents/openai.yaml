@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop"
+  short_description: "Run a lightweight cognition and evidence loop"
+  default_prompt: "Use Workloop to structure and verify this development task."

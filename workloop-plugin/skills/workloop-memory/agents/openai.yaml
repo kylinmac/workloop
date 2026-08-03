@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop Memory"
+  short_description: "Capture reusable failures as prevention checks"
+  default_prompt: "Update Workloop memory from this real failure or review."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workloop Plan"
+  short_description: "Plan verifiable work items and shared contracts"
+  default_prompt: "Turn this Workloop spec into an executable plan."

@@ -1,53 +1,57 @@
-# Workloop 最小协议
+# Workloop Minimal Protocol
 
-## 目标
+## Goal
 
-Workloop 只控制两件事：认知是否足够可靠，完成结论是否有真实证据。它不替代工程判断，也不为每种需求增加一套流程。
+Workloop controls only two things: whether cognition is reliable enough to act on and whether a completion claim has real evidence. It does not replace engineering judgment or create a separate process for every task type.
 
-## 四个阶段与固定产物
+## Four stages and fixed artifacts
 
-| 阶段 | 产物 | 必须回答 |
+| Stage | Artifact | Required answers |
 |---|---|---|
-| 理解 | `spec.md` | 目标、非目标、事实、阻塞假设、最大风险、验收标准 |
-| 计划与执行 | `plan.md` | 工作项、范围、依赖、AC 映射、验证、证据索引；共享边界存在时追加 Contract |
-| 独立验证 | `review.md` | AC 与计划、实现和证据是否语义一致，是否越界，最大风险是否真的被验证 |
-| 失败学习 | `.workloop/memory.md` | 哪个触发条件会再次出现，应执行什么预防检查 |
+| Understanding | `spec.md` | Goal, non-goals, facts, blocking assumptions, maximum risk, and acceptance criteria |
+| Planning and execution | `plan.md` | Work items, scope, dependencies, AC mapping, verification, and Evidence index; add Contracts only for shared boundaries |
+| Independent verification | `review.md` | Whether ACs, plan, implementation, and Evidence are semantically consistent; whether scope was exceeded; whether the maximum risk was truly tested |
+| Failure learning | `.workloop/memory.md` | Which trigger can recur and which executable prevention check should run |
 
-原始日志、截图和测试报告不粘贴进 `plan.md`。Evidence 只记录稳定 ID、结果、时间和来源路径；需要时再读取原始证据。
+Do not paste raw logs, screenshots, or test reports into `plan.md`. Evidence records only a stable ID, result, observation time, source path, and covered AC or Contract IDs. Read the raw source only when needed.
 
-## 最小状态机
+## Minimal state machine
 
 ```text
 clarifying → specified → executing → reviewing → done
 ```
 
-- `blocked` 暂停当前阶段，记录 `blocked_from` 和 `resume_when` 后返回原阶段。
-- `cancelled` 是终态。
-- 状态只存储在 `spec.md` frontmatter。
+- `blocked` pauses the current phase. Record `blocked_from` and `resume_when`, then return to the prior phase when the condition is true.
+- `cancelled` is terminal.
+- Store state only in the `spec.md` frontmatter.
 
-## 一致性关系
+## Consistency relationships
 
-完成前只检查六组可定位关系：
+Check only six traceable relationships before completion:
 
-1. 目标 ↔ 验收标准；
-2. 验收标准 ↔ 工作项；
-3. 阻塞假设 ↔ 关闭证据；
-4. 共享 Contract ↔ 供给方和消费方工作项；
-5. 验收标准与 Contract ↔ 有效 Evidence；
-6. 失败原因 ↔ 可执行预防检查。
+1. intent ↔ acceptance criteria;
+2. acceptance criteria ↔ work items;
+3. blocking assumptions ↔ closure evidence;
+4. shared Contracts ↔ provider and consumer work items;
+5. acceptance criteria and Contracts ↔ valid Evidence;
+6. failure causes ↔ executable prevention checks.
 
-结构完整性由插件检查；“实现行为是不是用户真正要的行为”由未参与执行的独立视角复核。插件不能把字符串存在当成业务语义正确。
+The plugin checks structural integrity. A reviewer who did not perform the implementation checks whether the behavior is what the user actually requested. The plugin must never treat the presence of a string as proof of semantic correctness.
 
-## 按需实例化
+## Instantiate only when needed
 
-- 没有共享边界，不创建 Contract。
-- 没有真实失败，不新增错误记忆。
-- 没有多工作项，不需要工作项投影。
-- 没有量化目标，不创建质量指标。
-- 一个上下文装不下时拆 Loop，不扩展状态机。
+- Create no Contract when there is no shared boundary.
+- Add no memory entry when there was no real failure or independent defect.
+- Generate no work-item projection when there is only one work item and no delegation boundary.
+- Create no quality metric when the requirement has no quantitative target.
+- Split work into another Loop when one clean context cannot finish it; do not extend the state machine.
 
-## Skill 与插件边界
+## Skill and plugin boundary
 
-`workloop-skills/` 负责理解、计划、执行、独立审查和失败学习的方法。它必须保持人可读、可独立使用、按阶段加载。
+`workloop-skills/` defines the method for understanding, planning, execution, independent review, and failure learning. It remains human-readable, independently usable, and loaded one phase at a time.
 
-`workloop-plugin/` 只固化机器能可靠判断的规则：状态、必需区块、稳定 ID、AC 覆盖、阻塞假设、Contract 双向引用、Evidence 引用、工作项范围和 review 结构。不得恢复全量知识状态、复杂 Schema、失败卡账本或旧控制快照。
+`workloop-plugin/` fixes only rules that a machine can reliably judge: state, required sections, stable IDs, AC coverage, blocking assumptions, reciprocal Contract references, Evidence references, work-item scope, and review structure. It must not restore the full knowledge-state model, complex schema family, failure-card ledger, or legacy control snapshots.
+
+## Language policy
+
+English is the canonical executable source because parser keys, status values, command interfaces, and cross-agent handoffs benefit from one stable vocabulary. `workloop-cn/` mirrors every human-facing source in Chinese for reading and comparison. Runtime code and plugin discovery never load the companion directory.
